@@ -1,0 +1,1 @@
+# sails-hook-redbox-storage-mongo
