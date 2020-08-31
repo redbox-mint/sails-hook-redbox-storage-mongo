@@ -1,0 +1,21 @@
+version: '3.1'
+networks:
+  main:
+services:
+  storage_hook:
+    image: qcifengineering/redbox-portal:latest
+    volumes:
+      - "../../:/opt/sails-hook-redbox-storage-mongo"
+    networks:
+     main:
+       aliases:
+         - storage_hook
+    entrypoint: /bin/bash -c "cd /opt/sails-hook-redbox-storage-mongo/support/test; chmod +x *.sh; ./launch-test.sh"
+  mongodb:
+    image: mvertes/alpine-mongo:latest
+    networks:
+      main:
+        aliases:
+          - mongodb
+    ports:
+       - "27017:27017"

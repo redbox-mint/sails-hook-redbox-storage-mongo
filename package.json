@@ -1,0 +1,43 @@
+{
+  "name": "@researchdatabox/sails-hook-redbox-storage-mongo",
+  "version": "1.0.0",
+  "description": "A MongoDB storage plugin for ReDBox.",
+  "main": "index.js",
+  "sails": {
+    "isHook": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/redbox-mint/sails-hook-redbox-storage-mongo.git"
+  },
+  "scripts": {
+    "test": "NODE_ENV=test; mocha",
+    "installHook": "docker run -v $(pwd):/opt/sailshook qcifengineering/redbox-portal /bin/bash -c 'cd /opt/redbox-portal;yarn add  \"file:/opt/sailshook\"'; docker commit $(docker ps -lq) redboxportalwithhook",
+    "runDev": "docker-compose -f support/development/docker-compose.yml up"
+  },
+  "keywords": [
+    "sails",
+    "hook",
+    "redbox",
+    "redbox research",
+    "redbox storage",
+    "redbox mongodb"
+  ],
+  "author": "QCIF Engineering",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "@types/chai": "^4.2.12",
+    "@types/lodash": "^4.14.159",
+    "@types/mocha": "^8.0.3",
+    "chai": "^4.2.0",
+    "mocha": "^8.1.1",
+    "sails": "^1.2.5",
+    "typescript": "^4.0.2"
+  },
+  "dependencies": {
+    "lodash": "^4.17.20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
