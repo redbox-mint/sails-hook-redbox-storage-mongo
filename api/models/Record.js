@@ -7,6 +7,13 @@
 
 module.exports = {
   attributes: {
+    redboxOid: {
+      type: 'string',
+      unique: true
+    },
+    harvestId: {
+      type: 'string'
+    },
     metaMetadata: {
       type: 'json'
     },
