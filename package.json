@@ -1,6 +1,6 @@
 {
   "name": "@researchdatabox/sails-hook-redbox-storage-mongo",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "A MongoDB storage plugin for ReDBox.",
   "main": "index.js",
   "sails": {
@@ -23,7 +23,7 @@
     "redbox storage",
     "redbox mongodb"
   ],
-  "author": "QCIF Engineering",
+  "author": "QCIF Engineering dev@redboxresearchdata.com.au",
   "license": "GPL-3.0",
   "devDependencies": {
     "@types/chai": "^4.2.12",

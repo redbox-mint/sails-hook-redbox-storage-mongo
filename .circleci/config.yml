@@ -1,0 +1,65 @@
+version: 2.1
+jobs:
+  build_and_publish:
+    docker:
+      - image: circleci/node:12.16.0
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - run: npm install
+      # run tests!
+      # - run: npm test
+      # # store test results
+      # - store_test_results:
+      #     path: test_results
+
+      # store code coverage
+      # - persist_to_workspace:
+      #     root: ~/repo
+      #     paths: .
+      - run:
+          name: Authenticate with NPM
+          command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/repo/.npmrc
+      - run:
+          name: Publish package
+          command: npm publish --access public
+
+workflows:
+  publish:
+    jobs:
+      - build_and_publish:
+          filters:
+            tags:
+              only: /^v.*/
+
+# jobs:
+#   build:
+#     docker:
+#       - image: "cimg/base:stable"
+#       - checkout
+#       - node/install:
+#           node-version: 12.16.0
+#       - run: npm install --production
+#       - run: node_modules/.bin/tsc
+#       - persist_to_workspace:
+#           root: .
+#           paths:
+#             - .
+#   test:
+#     machine: true
+#     steps:
+#       - docker/install-docker-compose
+#       - attach_workspace:
+#            at: /home/circleci/project
+#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm install 12.16.0 && nvm use 12.16.0
+#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm use 12.16.0 && node_modules/.bin/tsc -p tsconfig-codecov.json
+#       - run: (cd support/integration-testing && docker-compose -f docker-compose.newman.yml up --abort-on-container-exit --exit-code-from redboxportal && docker-compose -f docker-compose.mocha.yml up --abort-on-container-exit --exit-code-from redboxportal)
+#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm use 12.16.0 && npm i -g codecov && codecov -t $CODECOV_TOKEN
+#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm use 12.16.0 && node_modules/.bin/tsc
+#
+# orbs:
+#   node: circleci/node@4.0.0
+#   docker: circleci/docker@1.4.0
+# version: 2.1
+# workflows:
+#

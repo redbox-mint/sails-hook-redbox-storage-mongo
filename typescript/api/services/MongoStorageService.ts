@@ -32,7 +32,9 @@ export module Services {
       'provideUserAccessAndRemovePendingAccess',
       'getRelatedRecords',
       'delete',
-      'updateNotificationLog'
+      'updateNotificationLog',
+      'getRecords',
+      'exportAllPlans'
     ];
 
     constructor() {
@@ -57,9 +59,10 @@ export module Services {
         sails.log.verbose(JSON.stringify(collectionInfo));
       } catch (err) {
         sails.log.verbose(`Collection doesn't exist, creating: ${Record.tableName}`);
-        const initRec = {redboxOid: this.getUuid()};
+        const uuid = this.getUuid();
+        const initRec = {redboxOid: uuid};
         await Record.create(initRec);
-        await Record.destroyOne(initRec);
+        await Record.destroyOne({redboxOid: uuid});
       }
       await this.createIndices(db);
     }
@@ -353,7 +356,140 @@ export module Services {
       return record;
     }
 
+    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort=undefined) {
+      // BrandId ...
+      let query = {
+        "metaMetadata.brandId": brand.id
+      };
+      // Paginate ...
+      const options = {
+        limit: _.toNumber(rows),
+        skip: (start * rows)
+      }
+      // Sort ...defaults to lastSaveDate
+      if (_.isEmpty(sort)) {
+        sort = '{"lastSaveDate": -1}';
+      }
+      if (_.indexOf(`${sort}`, '1') == -1) {
+        // if only the field is specified, default to descending...
+        sort = `{"${sort}":-1}`;
+      } else {
+        sort = `{${sort}}`;
+      }
+      sails.log.verbose(`Sort is: ${sort}`);
+      options['sort'] = JSON.parse(sort);
+      // Authorization ...
+      let roleNames = this.getRoleNames(roles, brand);
+      let andArray = [];
+      let permissions = {
+        "$or": [{ "authorization.view": username },
+        { "authorization.edit": username },
+        { "authorization.editRoles": { "$in": roleNames } },
+        { "authorization.viewRoles": { "$in": roleNames } }]
+      };
+      andArray.push(permissions);
+      // Metadata type...
+      if (!_.isUndefined(recordType) && !_.isEmpty(recordType)) {
+        let typeArray = [];
+        _.each(recordType, rType => {
+          typeArray.push({ "metaMetadata.type": rType });
+        });
+        let types = { "$or": typeArray };
+        andArray.push(types);
+      }
+      // Package type...
+      if (!_.isUndefined(packageType) && !_.isEmpty(packageType)) {
+        let typeArray = [];
+        _.each(packageType, rType => {
+          typeArray.push({ "packageType": rType });
+        });
+        let types = { "$or": typeArray };
+        andArray.push(types);
+      }
+      // Workflow ...
+      if (workflowState != undefined) {
+        query["workflow.stage"] = workflowState;
+      }
+      query['$and'] = andArray;
+      sails.log.verbose(`Query: ${JSON.stringify(query)}`);
+      sails.log.verbose(`Options: ${JSON.stringify(options)}`);
+      const items = await this.runQuery(Record.tableName, query, options);
+      const response = new StorageServiceResponse();
+      response.success = true;
+      response.items = items;
+      return response;
+    }
 
+    protected async runQuery(colName, query, options) {
+      var db = Record.getDatastore().manager;
+      const col = await db.collection(colName);
+      return col.find(query, options).toArray();
+    }
+
+    public async exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType): Promise<string> {
+      let andArray = [];
+      let query = {
+        "metaMetadata.brandId": brand.id,
+        "metaMetadata.type": recType
+      };
+      let roleNames = this.getRoleNames(roles, brand);
+      let permissions = {
+        "$or": [{ "authorization.view": username },
+        { "authorization.edit": username },
+        { "authorization.editRoles": { "$in": roleNames } },
+        { "authorization.viewRoles": { "$in": roleNames } }]
+      };
+      andArray.push(permissions);
+      const options = {
+        limit: _.toNumber(sails.config.record.export.maxRecords),
+        sort: {
+          lastSaveDate: -1
+        }
+      };
+      if (!_.isEmpty(modAfter)) {
+        andArray.push({
+          lastSaveDate: {
+            '$gte': new Date(`${modAfter}T00:00:00Z`)
+          }
+        });
+      }
+
+      if (!_.isEmpty(modBefore)) {
+        andArray.push({
+          lastSaveDate: {
+            '$lte': new Date(`${modBefore}T23:59:59Z`)
+          }
+        });
+      }
+      // const dateQ = modBefore || modAfter ? ` AND date_object_modified:[${modAfter ? `${modAfter}T00:00:00Z` : '*'} TO ${modBefore ? `${modBefore}T23:59:59Z` : '*'}]` : '';
+      // var url = sails.config.record.baseUrl.redbox;
+      // url = `${url}${sails.config.record.api.search.url}?q=metaMetadata_type:${recType}${dateQ}&sort=date_object_modified desc&version=2.2&wt=${format}`;
+      // url = `${url}&start=0&rows=${sails.config.record.export.maxRecords}`;
+      // url = this.addAuthFilter(username, roles, brand)
+      // url = url + "&fq=metaMetadata_brandId:" + brand.id
+      // var options = this.getOptions(url);
+      query['$and'] = andArray;
+      sails.log.verbose(`Query: ${JSON.stringify(query)}`);
+      sails.log.verbose(`Options: ${JSON.stringify(options)}`);
+      // TODO: move this code to be async/streaming, so loading the resultset into memory won't be crashing the server....
+      //       requirements: need access to Express response object
+      // const items = await this.runQuery(Record.tableName, query, options);
+      // TODO: perhaps use SOLR for this?
+      return "";
+    }
+
+    protected getRoleNames(roles, brand) {
+      var roleNames = [];
+
+      for (var i = 0; i < roles.length; i++) {
+        var role = roles[i]
+        if (role.branding == brand.id) {
+          roleNames.push(roles[i].name);
+        }
+      }
+
+      return roleNames;
+    }
   }
 
 }

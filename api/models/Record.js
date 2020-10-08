@@ -25,6 +25,18 @@ module.exports = {
     },
     authorization: {
       type: 'json'
+    },
+    createdAt: false,
+    updatedAt: false,
+    dateCreated: {
+      type: 'ref',
+      columnType: 'Date',
+      autoCreatedAt: true
+    },
+    lastSaveDate: {
+      type: 'ref',
+      columnType: 'Date',
+      autoUpdatedAt: true
     }
   },
   datastore: 'redboxStorage'
