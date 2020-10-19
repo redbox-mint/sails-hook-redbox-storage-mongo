@@ -8,10 +8,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const Rx_1 = require("rxjs/Rx");
 const services = require("../core/CoreService.js");
 const StorageServiceResponse_js_1 = require("../core/StorageServiceResponse.js");
 const uuid_1 = require("uuid");
 const moment = require("moment");
+const Attachment_1 = require("../core/Attachment");
+const DatastreamServiceResponse_1 = require("../core/DatastreamServiceResponse");
+const mongodb = require("mongodb");
+const util = require("util");
+const stream = require("stream");
+const fs = require("fs");
+const pipeline = util.promisify(stream.pipeline);
 var Services;
 (function (Services) {
     class MongoStorageService extends services.Services.Core.Service {
@@ -29,7 +37,15 @@ var Services;
                 'delete',
                 'updateNotificationLog',
                 'getRecords',
-                'exportAllPlans'
+                'exportAllPlans',
+                'getAttachments',
+                'addDatastreams',
+                'updateDatastream',
+                'removeDatastream',
+                'addDatastream',
+                'addAndRemoveDatastreams',
+                'getDatastream',
+                'listDatastreams'
             ];
             let that = this;
             sails.on('ready', function () {
@@ -42,7 +58,7 @@ var Services;
         }
         init() {
             return __awaiter(this, void 0, void 0, function* () {
-                var db = Record.getDatastore().manager;
+                this.db = Record.getDatastore().manager;
                 try {
                     const collectionInfo = yield db.collection(Record.tableName, { strict: true });
                     sails.log.verbose(`${this.logHeader} Collection '${Record.tableName}' info:`);
@@ -55,7 +71,8 @@ var Services;
                     yield Record.create(initRec);
                     yield Record.destroyOne({ redboxOid: uuid });
                 }
-                yield this.createIndices(db);
+                this.gridFsBucket = new mongodb.GridFSBucket(this.db);
+                yield this.createIndices(this.db);
             });
         }
         createIndices(db) {
@@ -124,7 +141,7 @@ var Services;
                 let recordType = null;
                 if (!_.isEmpty(brand) && triggerPreSaveTriggers === true) {
                     try {
-                        recordType = yield RecordTypesService.get(brand, record.metaMetadata.type);
+                        recordType = yield RecordTypesService.get(brand, record.metaMetadata.type).toPromise();
                         record = yield this.recordsService.triggerPreSaveTriggers(oid, record, recordType, "onUpdate", user);
                     }
                     catch (err) {
@@ -240,7 +257,7 @@ var Services;
                 if (_.isEmpty(recordTypeName)) {
                     recordTypeName = record['metaMetadata']['type'];
                 }
-                let recordType = yield RecordTypesService.get(brand, recordTypeName);
+                let recordType = yield RecordTypesService.get(brand, recordTypeName).toPromise();
                 if (_.isEmpty(mappingContext)) {
                     mappingContext = {
                         'processedRelationships': [],
@@ -460,6 +477,108 @@ var Services;
                 }
             }
             return roleNames;
+        }
+        addDatastreams(oid, fileIds) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const response = new DatastreamServiceResponse_1.default();
+                response.message = '';
+                for (const fileId of fileIds) {
+                    try {
+                        yield this.addDatastream(oid, fileId);
+                        const successMessage = `Successfully uploaded: ${fileId}`;
+                        response.message = _.isEmpty(response.message) ? successMessage : `${response.message}\n${successMessage}`;
+                    }
+                    catch (err) {
+                        response.success = false;
+                        const failureMessage = `Failed to uploead: ${fileId}, error is:\n${JSON.stringify(err)}`;
+                        response.message = _.isEmpty(response.message) ? failureMessage : `${response.message}\n${failureMessage}`;
+                    }
+                }
+                return response;
+            });
+        }
+        updateDatastream(oid, record, newMetadata, fileRoot, fileIdsAdded) {
+            return FormsService.getFormByName(record.metaMetadata.form, true)
+                .flatMap(form => {
+                const reqs = [];
+                record.metaMetadata.attachmentFields = form.attachmentFields;
+                _.each(form.attachmentFields, (attField) => __awaiter(this, void 0, void 0, function* () {
+                    const oldAttachments = record.metadata[attField];
+                    const newAttachments = newMetadata[attField];
+                    const removeIds = [];
+                    if (!_.isUndefined(oldAttachments) && !_.isNull(oldAttachments) && !_.isNull(newAttachments)) {
+                        const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
+                        _.each(toRemove, (removeAtt) => {
+                            if (removeAtt.type == 'attachment') {
+                                removeIds.push(removeAtt.fileId);
+                            }
+                        });
+                    }
+                    if (!_.isUndefined(newAttachments) && !_.isNull(newAttachments)) {
+                        const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
+                        _.each(toAdd, (addAtt) => {
+                            if (addAtt.type == 'attachment') {
+                                fileIdsAdded.push(addAtt.fileId);
+                            }
+                        });
+                    }
+                    reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
+                }));
+                return Rx_1.Observable.of(reqs);
+            });
+        }
+        removeDatastream(oid, fileId) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const fileName = `${oid}/${fileId}`;
+                const fileRes = yield this.getFileWithName(fileName).toArray();
+                if (!_.isEmpty(fileRes)) {
+                    const fileDoc = fileRes[0];
+                    sails.log.verbose(`${this.logHeader} removeDatastream() -> Deleting:`);
+                    sails.log.verbose(JSON.stringify(fileDoc));
+                    const gridFsDelete = util.promisify(this.gridFsBucket.delete);
+                    yield gridFsDelete(fileDoc['_id']);
+                    sails.log.verbose(`${this.logHeader} removeDatastream() -> Delete successful.`);
+                }
+                else {
+                    sails.log.verbose(`${this.logHeader} removeDatastream() -> File not found: ${fileName}`);
+                }
+            });
+        }
+        addDatastream(oid, fileId) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const fpath = `${sails.config.record.attachments.stageDir}/${fileId}`;
+                const fileName = `${oid}/${fileId}`;
+                sails.log.verbose(`${this.logHeader} addDatastream() -> Adding: ${fileName}`);
+                yield pipeline(fs.createReadStream(fpath), this.gridFsBucket.openUploadStream(fileName));
+                sails.log.verbose(`${this.logHeader} addDatastream() -> Successfully added: ${fileName}`);
+            });
+        }
+        addAndRemoveDatastreams(oid, addIds, removeIds) {
+            return __awaiter(this, void 0, void 0, function* () {
+                for (const addId of addIds) {
+                    yield this.addDatastream(oid, addId);
+                }
+                for (const removeId of removeIds) {
+                    yield this.removeDatastream(oid, removeId);
+                }
+            });
+        }
+        getDatastream(oid, fileId) {
+            const fileName = `${oid}/${fileId}`;
+            sails.log.verbose(`${this.logHeader} getDatastream() -> Getting: ${fileName}`);
+            const response = new Attachment_1.default();
+            response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName);
+            return Rx_1.Observable.of(response);
+        }
+        listDatastreams(oid, fileId) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const fileName = `${oid}/${fileId}`;
+                sails.log.verbose(`${this.logHeader} listDatastreams() -> Listing: ${fileName}`);
+                return this.gridFsBucket.find({ filename: fileName }, {});
+            });
+        }
+        getFileWithName(fileName, options = { limit: 1 }) {
+            return this.gridFsBucket.find({ filename: fileName }, options);
         }
     }
     Services.MongoStorageService = MongoStorageService;

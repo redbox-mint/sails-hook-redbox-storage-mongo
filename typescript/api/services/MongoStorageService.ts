@@ -1,14 +1,26 @@
+import {
+  Observable
+} from 'rxjs/Rx';
 import services = require('../core/CoreService.js');
 import StorageService from '../core/StorageService.js';
 import RecordsService from '../core/RecordsService.js';
+import DatastreamService from '../core/DatastreamService.js';
 import {StorageServiceResponse} from '../core/StorageServiceResponse.js';
 import { Sails, Model } from "sails";
 import { v1 as uuidv1 } from 'uuid';
 import moment = require('moment');
+import Attachment from '../core/Attachment';
+import DatastreamServiceResponse from '../core/DatastreamServiceResponse';
+import mongodb = require('mongodb');
+import util = require('util');
+import stream = require('stream');
+import * as fs from 'fs';
+
+const pipeline = util.promisify(stream.pipeline);
 
 declare var sails: Sails;
 declare var _;
-declare var Record:Model, RecordsService, RecordTypesService;
+declare var Record:Model, RecordsService, RecordTypesService, FormsService;
 
 export module Services {
   /**
@@ -20,9 +32,11 @@ export module Services {
    * Author: <a href='https://github.com/shilob' target='_blank'>Shilo Banihit</a>
    *
    */
-  export class MongoStorageService extends services.Services.Core.Service implements StorageService {
+  export class MongoStorageService extends services.Services.Core.Service implements StorageService, DatastreamService {
     recordsService: RecordsService = null;
     logHeader: string = 'MongoStorageService::'
+    gridFsBucket: any;
+    db: any;
 
     protected _exportedMethods: any = [
       'create',
@@ -34,7 +48,15 @@ export module Services {
       'delete',
       'updateNotificationLog',
       'getRecords',
-      'exportAllPlans'
+      'exportAllPlans',
+      'getAttachments',
+      'addDatastreams',
+      'updateDatastream',
+      'removeDatastream',
+      'addDatastream',
+      'addAndRemoveDatastreams',
+      'getDatastream',
+      'listDatastreams'
     ];
 
     constructor() {
@@ -51,7 +73,7 @@ export module Services {
     }
 
     private async init() {
-      var db = Record.getDatastore().manager;
+      this.db = Record.getDatastore().manager;
       // check if the collection exists ...
       try {
         const collectionInfo = await db.collection(Record.tableName, {strict:true});
@@ -64,7 +86,8 @@ export module Services {
         await Record.create(initRec);
         await Record.destroyOne({redboxOid: uuid});
       }
-      await this.createIndices(db);
+      this.gridFsBucket = new mongodb.GridFSBucket(this.db);
+      await this.createIndices(this.db);
     }
 
     private async createIndices(db) {
@@ -134,7 +157,7 @@ export module Services {
       let recordType = null;
       if (!_.isEmpty(brand) && triggerPreSaveTriggers === true) {
         try {
-          recordType = await RecordTypesService.get(brand, record.metaMetadata.type);
+          recordType = await RecordTypesService.get(brand, record.metaMetadata.type).toPromise();
           record = await this.recordsService.triggerPreSaveTriggers(oid, record, recordType, "onUpdate", user);
         } catch (err) {
           sails.log.error(`${this.logHeader} Failed to run pre-save hooks when updating..`);
@@ -253,7 +276,7 @@ export module Services {
       if (_.isEmpty(recordTypeName)) {
         recordTypeName = record['metaMetadata']['type'];
       }
-      let recordType = await RecordTypesService.get(brand, recordTypeName);
+      let recordType = await RecordTypesService.get(brand, recordTypeName).toPromise();
       if (_.isEmpty(mappingContext)) {
         mappingContext = {
           'processedRelationships': [],
@@ -453,7 +476,6 @@ export module Services {
           }
         });
       }
-
       if (!_.isEmpty(modBefore)) {
         andArray.push({
           lastSaveDate: {
@@ -490,6 +512,119 @@ export module Services {
 
       return roleNames;
     }
+
+
+    public async addDatastreams(oid: string, fileIds: any[]): Promise<DatastreamServiceResponse> {
+      const response = new DatastreamServiceResponse();
+      response.message = '';
+      for (const fileId of fileIds) {
+        try {
+          await this.addDatastream(oid, fileId);
+          const successMessage = `Successfully uploaded: ${fileId}`;
+          response.message = _.isEmpty(response.message) ? successMessage :  `${response.message}\n${successMessage}`;
+        } catch (err) {
+          response.success = false;
+          const failureMessage = `Failed to uploead: ${fileId}, error is:\n${JSON.stringify(err)}`;
+          response.message = _.isEmpty(response.message) ? failureMessage :  `${response.message}\n${failureMessage}`;
+        }
+      }
+      return response;
+    }
+
+    public updateDatastream(oid: string, record, newMetadata, fileRoot, fileIdsAdded): any {
+      // loop thru the attachment fields and determine if we need to add or remove
+      return FormsService.getFormByName(record.metaMetadata.form, true)
+      .flatMap(form => {
+        const reqs = [];
+        record.metaMetadata.attachmentFields = form.attachmentFields;
+        _.each(form.attachmentFields, async (attField) => {
+          const oldAttachments = record.metadata[attField];
+          const newAttachments = newMetadata[attField];
+          const removeIds = [];
+          // process removals
+          if (!_.isUndefined(oldAttachments) && !_.isNull(oldAttachments) && !_.isNull(newAttachments)) {
+            const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
+            _.each(toRemove, (removeAtt) => {
+              if (removeAtt.type == 'attachment') {
+                removeIds.push(removeAtt.fileId);
+              }
+            });
+          }
+          // process additions
+          if (!_.isUndefined(newAttachments) && !_.isNull(newAttachments)) {
+            const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
+            _.each(toAdd, (addAtt) => {
+              if (addAtt.type == 'attachment') {
+                fileIdsAdded.push(addAtt.fileId);
+              }
+            });
+          }
+          reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
+        });
+        return Observable.of(reqs);
+      });
+    }
+
+    public async removeDatastream(oid, fileId) {
+      const fileName = `${oid}/${fileId}`;
+      const fileRes = await this.getFileWithName(fileName).toArray();
+      if (!_.isEmpty(fileRes)) {
+        const fileDoc = fileRes[0];
+        sails.log.verbose(`${this.logHeader} removeDatastream() -> Deleting:`);
+        sails.log.verbose(JSON.stringify(fileDoc));
+        const gridFsDelete = util.promisify(this.gridFsBucket.delete);
+        await gridFsDelete(fileDoc['_id']);
+        sails.log.verbose(`${this.logHeader} removeDatastream() -> Delete successful.`);
+      } else {
+        sails.log.verbose(`${this.logHeader} removeDatastream() -> File not found: ${fileName}`);
+      }
+    }
+
+    public async addDatastream(oid, fileId) {
+      const fpath = `${sails.config.record.attachments.stageDir}/${fileId}`;
+      const fileName = `${oid}/${fileId}`;
+      sails.log.verbose(`${this.logHeader} addDatastream() -> Adding: ${fileName}`);
+      await pipeline(
+        fs.createReadStream(fpath),
+        this.gridFsBucket.openUploadStream(fileName)
+      );
+      sails.log.verbose(`${this.logHeader} addDatastream() -> Successfully added: ${fileName}`);
+    }
+
+    public async addAndRemoveDatastreams(oid, addIds: any[], removeIds: any[]) {
+      for (const addId of addIds) {
+        await this.addDatastream(oid, addId);
+      }
+      for (const removeId of removeIds) {
+        await this.removeDatastream(oid, removeId);
+      }
+    }
+
+    public getDatastream(oid, fileId): any {
+      const fileName = `${oid}/${fileId}`;
+      sails.log.verbose(`${this.logHeader} getDatastream() -> Getting: ${fileName}`);
+      const response = new Attachment();
+      response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName)
+      return Observable.of(response);
+    }
+
+    public async listDatastreams(oid, fileId) {
+      const fileName = `${oid}/${fileId}`;
+      sails.log.verbose(`${this.logHeader} listDatastreams() -> Listing: ${fileName}`);
+      return this.gridFsBucket.find({filename: fileName}, {});
+    }
+    /**
+     * Returns a MongoDB cursor
+     * @author <a target='_' href='https://github.com/shilob'>Shilo Banihit</a>
+     * @param  fileName
+     * @param  options
+     * @return
+     */
+    protected getFileWithName(fileName:string, options: any = {limit: 1}) {
+      return this.gridFsBucket.find({filename: fileName}, options);
+    }
+
+
   }
 
 }
