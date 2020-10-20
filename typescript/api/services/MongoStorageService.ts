@@ -397,14 +397,19 @@ export module Services {
       if (_.isEmpty(sort)) {
         sort = '{"lastSaveDate": -1}';
       }
+      sails.log.verbose(`Sort is: ${sort}`);
       if (_.indexOf(`${sort}`, '1') == -1) {
         // if only the field is specified, default to descending...
         sort = `{"${sort}":-1}`;
       } else {
-        sort = `{${sort}}`;
+        try {
+          options['sort'] = JSON.parse(sort);
+        } catch (error) {
+          // trying to massage this to valid JSON
+          options['sort'] = {};
+          options['sort'][`${sort.substring(0, sort.indexOf(':'))}`] = _.toNumber(sort.substring(sort.indexOf(':') + 1));
+        }
       }
-      sails.log.verbose(`Sort is: ${sort}`);
-      options['sort'] = JSON.parse(sort);
       // Authorization ...
       let roleNames = this.getRoleNames(roles, brand);
       let andArray = [];

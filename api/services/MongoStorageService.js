@@ -377,14 +377,19 @@ var Services;
                 if (_.isEmpty(sort)) {
                     sort = '{"lastSaveDate": -1}';
                 }
+                sails.log.verbose(`Sort is: ${sort}`);
                 if (_.indexOf(`${sort}`, '1') == -1) {
                     sort = `{"${sort}":-1}`;
                 }
                 else {
-                    sort = `{${sort}}`;
+                    try {
+                        options['sort'] = JSON.parse(sort);
+                    }
+                    catch (error) {
+                        options['sort'] = {};
+                        options['sort'][`${sort.substring(0, sort.indexOf(':'))}`] = _.toNumber(sort.substring(sort.indexOf(':') + 1));
+                    }
                 }
-                sails.log.verbose(`Sort is: ${sort}`);
-                options['sort'] = JSON.parse(sort);
                 let roleNames = this.getRoleNames(roles, brand);
                 let andArray = [];
                 let permissions = {
