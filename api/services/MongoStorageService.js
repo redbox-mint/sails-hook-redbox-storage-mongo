@@ -19,6 +19,8 @@ const mongodb = require("mongodb");
 const util = require("util");
 const stream = require("stream");
 const fs = require("fs");
+const json2csv_1 = require("json2csv");
+const { transforms: { unwind, flatten } } = require('json2csv');
 const pipeline = util.promisify(stream.pipeline);
 var Services;
 (function (Services) {
@@ -60,7 +62,7 @@ var Services;
             return __awaiter(this, void 0, void 0, function* () {
                 this.db = Record.getDatastore().manager;
                 try {
-                    const collectionInfo = yield db.collection(Record.tableName, { strict: true });
+                    const collectionInfo = yield this.db.collection(Record.tableName, { strict: true });
                     sails.log.verbose(`${this.logHeader} Collection '${Record.tableName}' info:`);
                     sails.log.verbose(JSON.stringify(collectionInfo));
                 }
@@ -72,6 +74,7 @@ var Services;
                     yield Record.destroyOne({ redboxOid: uuid });
                 }
                 this.gridFsBucket = new mongodb.GridFSBucket(this.db);
+                this.recordCol = yield this.db.collection(Record.tableName);
                 yield this.createIndices(this.db);
             });
         }
@@ -428,45 +431,49 @@ var Services;
             });
         }
         exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType) {
-            return __awaiter(this, void 0, void 0, function* () {
-                let andArray = [];
-                let query = {
-                    "metaMetadata.brandId": brand.id,
-                    "metaMetadata.type": recType
-                };
-                let roleNames = this.getRoleNames(roles, brand);
-                let permissions = {
-                    "$or": [{ "authorization.view": username },
-                        { "authorization.edit": username },
-                        { "authorization.editRoles": { "$in": roleNames } },
-                        { "authorization.viewRoles": { "$in": roleNames } }]
-                };
-                andArray.push(permissions);
-                const options = {
-                    limit: _.toNumber(sails.config.record.export.maxRecords),
-                    sort: {
-                        lastSaveDate: -1
+            let andArray = [];
+            let query = {
+                "metaMetadata.brandId": brand.id,
+                "metaMetadata.type": recType
+            };
+            let roleNames = this.getRoleNames(roles, brand);
+            let permissions = {
+                "$or": [{ "authorization.view": username },
+                    { "authorization.edit": username },
+                    { "authorization.editRoles": { "$in": roleNames } },
+                    { "authorization.viewRoles": { "$in": roleNames } }]
+            };
+            andArray.push(permissions);
+            const options = {
+                limit: _.toNumber(sails.config.record.export.maxRecords),
+                sort: {
+                    lastSaveDate: -1
+                }
+            };
+            if (!_.isEmpty(modAfter)) {
+                andArray.push({
+                    lastSaveDate: {
+                        '$gte': new Date(`${modAfter}T00:00:00Z`)
                     }
-                };
-                if (!_.isEmpty(modAfter)) {
-                    andArray.push({
-                        lastSaveDate: {
-                            '$gte': new Date(`${modAfter}T00:00:00Z`)
-                        }
-                    });
-                }
-                if (!_.isEmpty(modBefore)) {
-                    andArray.push({
-                        lastSaveDate: {
-                            '$lte': new Date(`${modBefore}T23:59:59Z`)
-                        }
-                    });
-                }
-                query['$and'] = andArray;
-                sails.log.verbose(`Query: ${JSON.stringify(query)}`);
-                sails.log.verbose(`Options: ${JSON.stringify(options)}`);
-                return "";
-            });
+                });
+            }
+            if (!_.isEmpty(modBefore)) {
+                andArray.push({
+                    lastSaveDate: {
+                        '$lte': new Date(`${modBefore}T23:59:59Z`)
+                    }
+                });
+            }
+            query['$and'] = andArray;
+            sails.log.verbose(`Query: ${JSON.stringify(query)}`);
+            sails.log.verbose(`Options: ${JSON.stringify(options)}`);
+            if (format == 'csv') {
+                const opts = { transforms: [flatten()] };
+                const transformOpts = { objectMode: true };
+                const json2csv = new json2csv_1.Transform(opts, transformOpts);
+                return this.recordCol.find(query, options).stream().pipe(json2csv);
+            }
+            return this.recordCol.find(query, options).stream();
         }
         getRoleNames(roles, brand) {
             var roleNames = [];
@@ -524,6 +531,9 @@ var Services;
                     }
                     reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
                 }));
+                if (_.isEmpty(reqs)) {
+                    reqs.push(Rx_1.Observable.of({ "request": "dummy" }));
+                }
                 return Rx_1.Observable.of(reqs);
             });
         }

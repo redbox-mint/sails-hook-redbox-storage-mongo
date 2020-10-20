@@ -15,6 +15,8 @@ import mongodb = require('mongodb');
 import util = require('util');
 import stream = require('stream');
 import * as fs from 'fs';
+import { Transform } from 'json2csv';
+const { transforms: { unwind, flatten } } = require('json2csv');
 
 const pipeline = util.promisify(stream.pipeline);
 
@@ -37,6 +39,7 @@ export module Services {
     logHeader: string = 'MongoStorageService::'
     gridFsBucket: any;
     db: any;
+    recordCol: any;
 
     protected _exportedMethods: any = [
       'create',
@@ -76,7 +79,7 @@ export module Services {
       this.db = Record.getDatastore().manager;
       // check if the collection exists ...
       try {
-        const collectionInfo = await db.collection(Record.tableName, {strict:true});
+        const collectionInfo = await this.db.collection(Record.tableName, {strict:true});
         sails.log.verbose(`${this.logHeader} Collection '${Record.tableName}' info:`);
         sails.log.verbose(JSON.stringify(collectionInfo));
       } catch (err) {
@@ -87,6 +90,7 @@ export module Services {
         await Record.destroyOne({redboxOid: uuid});
       }
       this.gridFsBucket = new mongodb.GridFSBucket(this.db);
+      this.recordCol = await this.db.collection(Record.tableName);
       await this.createIndices(this.db);
     }
 
@@ -449,7 +453,7 @@ export module Services {
       return col.find(query, options).toArray();
     }
 
-    public async exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType): Promise<string> {
+    public exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType): stream.Readable {
       let andArray = [];
       let query = {
         "metaMetadata.brandId": brand.id,
@@ -483,21 +487,16 @@ export module Services {
           }
         });
       }
-      // const dateQ = modBefore || modAfter ? ` AND date_object_modified:[${modAfter ? `${modAfter}T00:00:00Z` : '*'} TO ${modBefore ? `${modBefore}T23:59:59Z` : '*'}]` : '';
-      // var url = sails.config.record.baseUrl.redbox;
-      // url = `${url}${sails.config.record.api.search.url}?q=metaMetadata_type:${recType}${dateQ}&sort=date_object_modified desc&version=2.2&wt=${format}`;
-      // url = `${url}&start=0&rows=${sails.config.record.export.maxRecords}`;
-      // url = this.addAuthFilter(username, roles, brand)
-      // url = url + "&fq=metaMetadata_brandId:" + brand.id
-      // var options = this.getOptions(url);
       query['$and'] = andArray;
       sails.log.verbose(`Query: ${JSON.stringify(query)}`);
       sails.log.verbose(`Options: ${JSON.stringify(options)}`);
-      // TODO: move this code to be async/streaming, so loading the resultset into memory won't be crashing the server....
-      //       requirements: need access to Express response object
-      // const items = await this.runQuery(Record.tableName, query, options);
-      // TODO: perhaps use SOLR for this?
-      return "";
+      if (format == 'csv') {
+        const opts = {transforms: [flatten()]};
+        const transformOpts = { objectMode: true };
+        const json2csv = new Transform(opts, transformOpts);
+        return this.recordCol.find(query, options).stream().pipe(json2csv);
+      }
+      return this.recordCol.find(query, options).stream();
     }
 
     protected getRoleNames(roles, brand) {
@@ -561,6 +560,9 @@ export module Services {
           }
           reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
         });
+        if (_.isEmpty(reqs)) {
+          reqs.push(Observable.of({"request": "dummy"}));
+        }
         return Observable.of(reqs);
       });
     }
