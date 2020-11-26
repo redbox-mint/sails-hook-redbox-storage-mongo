@@ -36,7 +36,6 @@ export module Services {
    */
   export class MongoStorageService extends services.Services.Core.Service implements StorageService, DatastreamService {
     recordsService: RecordsService = null;
-    logHeader: string = 'MongoStorageService::'
     gridFsBucket: any;
     db: any;
     recordCol: any;
@@ -64,6 +63,7 @@ export module Services {
 
     constructor() {
       super();
+      this.logHeader = 'MongoStorageService::';
       let that = this;
       sails.on('ready', function() {
         that.recordsService = RecordsService;
@@ -112,17 +112,13 @@ export module Services {
       }
     }
 
-    public async create(brand, record, recordType, user?, triggerPreSaveTriggers?: boolean, triggerPostSaveTriggers?: boolean):Promise<any> {
+    public async create(brand, record, recordType, user?):Promise<any> {
       sails.log.verbose(`${this.logHeader} create() -> Begin`);
       let response = new StorageServiceResponse();
       // Create DB entry
       record.redboxOid = this.getUuid();
       response.oid = record.redboxOid;
-      // Pre-Save hooks
-      if (triggerPreSaveTriggers) {
-        sails.log.verbose(`${this.logHeader} Triggering pre-save hook...`);
-        record = await this.recordsService.triggerPreSaveTriggers(null, record, recordType, "onCreate", user);
-      }
+
       try {
         sails.log.verbose(`${this.logHeader} Saving to DB...`);
         await Record.create(record);
@@ -135,45 +131,14 @@ export module Services {
         response.message = err.message;
         return response;
       }
-      if (triggerPostSaveTriggers) {
-        sails.log.verbose(`${this.logHeader} Triggering post-save...`);
-        // Trigger Post-save sync hooks ...
-        try {
-          response = await this.recordsService.triggerPostSaveSyncTriggers(response['oid'], record, recordType, 'onCreate', user, response);
-        } catch (err) {
-          sails.log.error(`${this.logHeader} Exception while running post save sync hooks when creating:`);
-          sails.log.error(JSON.stringify(err));
-          response.success = false;
-          response.message = err.message;
-          return response;
-        }
-        // Fire Post-save hooks async ...
-        this.recordsService.triggerPostSaveTriggers(response['oid'], record, recordType, 'onCreate', user);
-      }
       sails.log.verbose(JSON.stringify(response));
       sails.log.verbose(`${this.logHeader} create() -> End`);
       return response;
     }
 
-    public async updateMeta(brand, oid, record, user?, triggerPreSaveTriggers?: boolean, triggerPostSaveTriggers?: boolean): Promise<any> {
+    public async updateMeta(brand, oid, record, user?): Promise<any> {
       let response = new StorageServiceResponse();
       response.oid = oid;
-      let recordType = null;
-      if (!_.isEmpty(brand) && triggerPreSaveTriggers === true) {
-        try {
-          recordType = await RecordTypesService.get(brand, record.metaMetadata.type).toPromise();
-          record = await this.recordsService.triggerPreSaveTriggers(oid, record, recordType, "onUpdate", user);
-        } catch (err) {
-          sails.log.error(`${this.logHeader} Failed to run pre-save hooks when updating..`);
-          sails.log.error(JSON.stringify(err));
-          response.message = err.message;
-          return response;
-        }
-      }
-      // unsetting the ID just to be safe
-      _.unset(record, 'id');
-      _.unset(record, 'redboxOid');
-      // updating...
       try {
         await Record.updateOne({redboxOid: oid}).set(record);
         response.success = true;
@@ -182,20 +147,6 @@ export module Services {
         sails.log.error(JSON.stringify(err));
         response.success = false;
         response.message = err;
-      }
-      if (!_.isEmpty(recordType) && triggerPostSaveTriggers === true) {
-        // Trigger Post-save sync hooks ...
-        try {
-          response = await this.recordsService.triggerPostSaveSyncTriggers(response['oid'], record, recordType, 'onCreate', user, response);
-        } catch (err) {
-          sails.log.error(`${this.logHeader} Exception while running post save sync hooks when creating:`);
-          sails.log.error(JSON.stringify(err));
-          response.success = false;
-          response.message = err.message;
-          return response;
-        }
-        // Fire Post-save hooks async ...
-        this.recordsService.triggerPostSaveTriggers(response['oid'], record, recordType, 'onCreate', user);
       }
       return response;
     }
@@ -391,7 +342,7 @@ export module Services {
       // Paginate ...
       const options = {
         limit: _.toNumber(rows),
-        skip: (start * rows)
+        skip: _.toNumber(start)
       }
       // Sort ...defaults to lastSaveDate
       if (_.isEmpty(sort)) {
@@ -445,17 +396,16 @@ export module Services {
       query['$and'] = andArray;
       sails.log.verbose(`Query: ${JSON.stringify(query)}`);
       sails.log.verbose(`Options: ${JSON.stringify(options)}`);
-      const items = await this.runQuery(Record.tableName, query, options);
+      const {items, totalItems} = await this.runRecordQuery(Record.tableName, query, options);
       const response = new StorageServiceResponse();
       response.success = true;
       response.items = items;
+      response.totalItems = totalItems;
       return response;
     }
 
-    protected async runQuery(colName, query, options) {
-      var db = Record.getDatastore().manager;
-      const col = await db.collection(colName);
-      return col.find(query, options).toArray();
+    protected async runRecordQuery(colName, query, options) {
+      return { items: await this.recordCol.find(query, options).toArray(), totalItems: await this.recordCol.count(query) } ;
     }
 
     public exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType): stream.Readable {

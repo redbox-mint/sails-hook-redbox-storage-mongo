@@ -28,7 +28,6 @@ var Services;
         constructor() {
             super();
             this.recordsService = null;
-            this.logHeader = 'MongoStorageService::';
             this._exportedMethods = [
                 'create',
                 'updateMeta',
@@ -49,6 +48,7 @@ var Services;
                 'getDatastream',
                 'listDatastreams'
             ];
+            this.logHeader = 'MongoStorageService::';
             let that = this;
             sails.on('ready', function () {
                 that.recordsService = RecordsService;
@@ -95,16 +95,12 @@ var Services;
                 }
             });
         }
-        create(brand, record, recordType, user, triggerPreSaveTriggers, triggerPostSaveTriggers) {
+        create(brand, record, recordType, user) {
             return __awaiter(this, void 0, void 0, function* () {
                 sails.log.verbose(`${this.logHeader} create() -> Begin`);
                 let response = new StorageServiceResponse_js_1.StorageServiceResponse();
                 record.redboxOid = this.getUuid();
                 response.oid = record.redboxOid;
-                if (triggerPreSaveTriggers) {
-                    sails.log.verbose(`${this.logHeader} Triggering pre-save hook...`);
-                    record = yield this.recordsService.triggerPreSaveTriggers(null, record, recordType, "onCreate", user);
-                }
                 try {
                     sails.log.verbose(`${this.logHeader} Saving to DB...`);
                     yield Record.create(record);
@@ -118,44 +114,15 @@ var Services;
                     response.message = err.message;
                     return response;
                 }
-                if (triggerPostSaveTriggers) {
-                    sails.log.verbose(`${this.logHeader} Triggering post-save...`);
-                    try {
-                        response = yield this.recordsService.triggerPostSaveSyncTriggers(response['oid'], record, recordType, 'onCreate', user, response);
-                    }
-                    catch (err) {
-                        sails.log.error(`${this.logHeader} Exception while running post save sync hooks when creating:`);
-                        sails.log.error(JSON.stringify(err));
-                        response.success = false;
-                        response.message = err.message;
-                        return response;
-                    }
-                    this.recordsService.triggerPostSaveTriggers(response['oid'], record, recordType, 'onCreate', user);
-                }
                 sails.log.verbose(JSON.stringify(response));
                 sails.log.verbose(`${this.logHeader} create() -> End`);
                 return response;
             });
         }
-        updateMeta(brand, oid, record, user, triggerPreSaveTriggers, triggerPostSaveTriggers) {
+        updateMeta(brand, oid, record, user) {
             return __awaiter(this, void 0, void 0, function* () {
                 let response = new StorageServiceResponse_js_1.StorageServiceResponse();
                 response.oid = oid;
-                let recordType = null;
-                if (!_.isEmpty(brand) && triggerPreSaveTriggers === true) {
-                    try {
-                        recordType = yield RecordTypesService.get(brand, record.metaMetadata.type).toPromise();
-                        record = yield this.recordsService.triggerPreSaveTriggers(oid, record, recordType, "onUpdate", user);
-                    }
-                    catch (err) {
-                        sails.log.error(`${this.logHeader} Failed to run pre-save hooks when updating..`);
-                        sails.log.error(JSON.stringify(err));
-                        response.message = err.message;
-                        return response;
-                    }
-                }
-                _.unset(record, 'id');
-                _.unset(record, 'redboxOid');
                 try {
                     yield Record.updateOne({ redboxOid: oid }).set(record);
                     response.success = true;
@@ -165,19 +132,6 @@ var Services;
                     sails.log.error(JSON.stringify(err));
                     response.success = false;
                     response.message = err;
-                }
-                if (!_.isEmpty(recordType) && triggerPostSaveTriggers === true) {
-                    try {
-                        response = yield this.recordsService.triggerPostSaveSyncTriggers(response['oid'], record, recordType, 'onCreate', user, response);
-                    }
-                    catch (err) {
-                        sails.log.error(`${this.logHeader} Exception while running post save sync hooks when creating:`);
-                        sails.log.error(JSON.stringify(err));
-                        response.success = false;
-                        response.message = err.message;
-                        return response;
-                    }
-                    this.recordsService.triggerPostSaveTriggers(response['oid'], record, recordType, 'onCreate', user);
                 }
                 return response;
             });
@@ -372,7 +326,7 @@ var Services;
                 };
                 const options = {
                     limit: _.toNumber(rows),
-                    skip: (start * rows)
+                    skip: _.toNumber(start)
                 };
                 if (_.isEmpty(sort)) {
                     sort = '{"lastSaveDate": -1}';
@@ -421,18 +375,17 @@ var Services;
                 query['$and'] = andArray;
                 sails.log.verbose(`Query: ${JSON.stringify(query)}`);
                 sails.log.verbose(`Options: ${JSON.stringify(options)}`);
-                const items = yield this.runQuery(Record.tableName, query, options);
+                const { items, totalItems } = yield this.runRecordQuery(Record.tableName, query, options);
                 const response = new StorageServiceResponse_js_1.StorageServiceResponse();
                 response.success = true;
                 response.items = items;
+                response.totalItems = totalItems;
                 return response;
             });
         }
-        runQuery(colName, query, options) {
+        runRecordQuery(colName, query, options) {
             return __awaiter(this, void 0, void 0, function* () {
-                var db = Record.getDatastore().manager;
-                const col = yield db.collection(colName);
-                return col.find(query, options).toArray();
+                return { items: yield this.recordCol.find(query, options).toArray(), totalItems: yield this.recordCol.count(query) };
             });
         }
         exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType) {
