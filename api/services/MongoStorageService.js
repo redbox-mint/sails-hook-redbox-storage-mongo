@@ -27,7 +27,6 @@ var Services;
     class MongoStorageService extends services.Services.Core.Service {
         constructor() {
             super();
-            this.recordsService = null;
             this._exportedMethods = [
                 'create',
                 'updateMeta',
@@ -51,7 +50,6 @@ var Services;
             this.logHeader = 'MongoStorageService::';
             let that = this;
             sails.on('ready', function () {
-                that.recordsService = RecordsService;
                 that.init();
             });
         }
@@ -217,47 +215,48 @@ var Services;
                 let recordType = yield RecordTypesService.get(brand, recordTypeName).toPromise();
                 if (_.isEmpty(mappingContext)) {
                     mappingContext = {
-                        'processedRelationships': [],
+                        'processedRelationships': [recordTypeName],
                         'relatedObjects': {}
                     };
+                    mappingContext.relatedObjects[recordTypeName] = [record];
                 }
-                let relationships = [];
-                let processedRelationships = [];
-                processedRelationships.push(recordType.name);
                 let relatedTo = recordType['relatedTo'];
-                if (_.isArray(relatedTo)) {
-                    let relatedRecords = null;
-                    _.each(relatedTo, (relationship) => __awaiter(this, void 0, void 0, function* () {
+                if (_.isArray(relatedTo) && _.size(relatedTo) > 0) {
+                    for (let relationship of relatedTo) {
                         sails.log.verbose(`${this.logHeader} Processing relationship:`);
                         sails.log.verbose(JSON.stringify(relationship));
-                        relationships.push(relationship);
-                        const recordType = relationship['recordType'];
+                        const targetRecordType = relationship['recordType'];
                         const criteria = {};
-                        criteria['metaMetadata.type'] = relationship['recordType'];
+                        criteria['metaMetadata.type'] = targetRecordType;
                         criteria[relationship['foreignField']] = oid;
                         sails.log.verbose(`${this.logHeader} Finding related records criteria:`);
                         sails.log.verbose(JSON.stringify(criteria));
-                        const relatedRecords = yield Record.find(criteria);
-                        const recordRelationships = relatedRecords[recordType];
-                        let newRelatedObjects = {};
-                        newRelatedObjects[recordType] = recordRelationships;
-                        _.merge(mappingContext, {
-                            relatedObjects: newRelatedObjects
-                        });
-                        if (_.indexOf(mappingContext['processedRelationships'], relationship['recordType']) < 0) {
-                            mappingContext['processedRelationships'].push(recordType);
-                            for (let j = 0; j < recordRelationships.length; j++) {
-                                let recordRelationship = recordRelationships[j];
-                                mappingContext = yield this.getRelatedRecords(recordRelationship.redboxOid, brand, relationship['recordType'], mappingContext);
+                        const relatedRecords = yield Record.find(criteria).meta({ enableExperimentalDeepTargets: true });
+                        sails.log.verbose(`${this.logHeader} Got related records:`);
+                        sails.log.verbose(JSON.stringify(relatedRecords));
+                        if (_.size(relatedRecords) > 0) {
+                            if (_.isEmpty(mappingContext.relatedObjects[targetRecordType])) {
+                                mappingContext.relatedObjects[targetRecordType] = relatedRecords;
+                            }
+                            else {
+                                mappingContext.relatedObjects[targetRecordType] = mappingContext.relatedObjects[targetRecordType].concat(relatedRecords);
+                            }
+                            for (let j = 0; j < relatedRecords.length; j++) {
+                                let recordRelationship = relatedRecords[j];
+                                mappingContext = yield this.getRelatedRecords(recordRelationship.redboxOid, brand, null, mappingContext);
                             }
                         }
-                    }));
-                    return mappingContext;
+                        if (!_.includes(mappingContext.processedRelationships, targetRecordType)) {
+                            mappingContext.processedRelationships.push(targetRecordType);
+                        }
+                    }
                 }
                 else {
                     sails.log.verbose(`${this.logHeader} RecordType has no relationships: ${recordTypeName}`);
-                    return mappingContext;
                 }
+                sails.log.verbose(`${this.logHeader} Current mapping context:`);
+                sails.log.verbose(JSON.stringify(mappingContext));
+                return mappingContext;
             });
         }
         delete(oid) {
