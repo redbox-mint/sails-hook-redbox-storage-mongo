@@ -277,10 +277,11 @@ export module Services {
     }
 
 
-    public async delete(oid): Promise<any> {
+    public async delete(oid) {
       const response = new StorageServiceResponse();
       try {
         await Record.destroyOne({redboxOid: oid});
+        response.success = true;
       } catch (err) {
         sails.log.error(`${this.logHeader} Failed to delete record: ${oid}`);
         sails.log.error(JSON.stringify(err));

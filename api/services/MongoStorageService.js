@@ -1,13 +1,15 @@
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
         function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Services = void 0;
 const Rx_1 = require("rxjs/Rx");
 const services = require("../core/CoreService.js");
 const StorageServiceResponse_js_1 = require("../core/StorageServiceResponse.js");
@@ -264,6 +266,7 @@ var Services;
                 const response = new StorageServiceResponse_js_1.StorageServiceResponse();
                 try {
                     yield Record.destroyOne({ redboxOid: oid });
+                    response.success = true;
                 }
                 catch (err) {
                     sails.log.error(`${this.logHeader} Failed to delete record: ${oid}`);
