@@ -266,6 +266,19 @@ var Services;
                 const response = new StorageServiceResponse_js_1.StorageServiceResponse();
                 try {
                     yield Record.destroyOne({ redboxOid: oid });
+                    const datastreams = yield this.listDatastreams(oid, null);
+                    if (_.size(datastreams) > 0) {
+                        _.each(datastreams, (file) => {
+                            sails.log.verbose(`Deleting:`);
+                            sails.log.verbose(JSON.stringify(file));
+                            this.gridFsBucket.delete(file['_id'], (err, res) => {
+                                if (err) {
+                                    sails.log.error(`Error deleting: ${file['_id']}`);
+                                    sails.log.error(JSON.stringify(err));
+                                }
+                            });
+                        });
+                    }
                     response.success = true;
                 }
                 catch (err) {
@@ -505,8 +518,12 @@ var Services;
                     const fileDoc = fileRes[0];
                     sails.log.verbose(`${this.logHeader} removeDatastream() -> Deleting:`);
                     sails.log.verbose(JSON.stringify(fileDoc));
-                    const gridFsDelete = util.promisify(this.gridFsBucket.delete);
-                    yield gridFsDelete(fileDoc['_id']);
+                    this.gridFsBucket.delete(fileDoc['_id'], (err, res) => {
+                        if (err) {
+                            sails.log.error(`Error deleting: ${fileDoc['_id']}`);
+                            sails.log.error(JSON.stringify(err));
+                        }
+                    });
                     sails.log.verbose(`${this.logHeader} removeDatastream() -> Delete successful.`);
                 }
                 else {
@@ -519,7 +536,7 @@ var Services;
                 const fpath = `${sails.config.record.attachments.stageDir}/${fileId}`;
                 const fileName = `${oid}/${fileId}`;
                 sails.log.verbose(`${this.logHeader} addDatastream() -> Adding: ${fileName}`);
-                yield pipeline(fs.createReadStream(fpath), this.gridFsBucket.openUploadStream(fileName));
+                yield pipeline(fs.createReadStream(fpath), this.gridFsBucket.openUploadStream(fileName, { metadata: { redboxOid: oid } }));
                 sails.log.verbose(`${this.logHeader} addDatastream() -> Successfully added: ${fileName}`);
             });
         }
@@ -542,9 +559,14 @@ var Services;
         }
         listDatastreams(oid, fileId) {
             return __awaiter(this, void 0, void 0, function* () {
-                const fileName = `${oid}/${fileId}`;
-                sails.log.verbose(`${this.logHeader} listDatastreams() -> Listing: ${fileName}`);
-                return this.gridFsBucket.find({ filename: fileName }, {});
+                let query = { "metadata.redboxOid": oid };
+                if (!_.isEmpty(fileId)) {
+                    const fileName = `${oid}/${fileId}`;
+                    query = { filename: fileName };
+                }
+                sails.log.verbose(`${this.logHeader} listDatastreams() -> Listing attachments of oid: ${oid}`);
+                sails.log.verbose(JSON.stringify(query));
+                return this.gridFsBucket.find(query, {}).toArray();
             });
         }
         getFileWithName(fileName, options = { limit: 1 }) {
