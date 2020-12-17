@@ -17,6 +17,7 @@ const uuid_1 = require("uuid");
 const moment = require("moment");
 const Attachment_1 = require("../core/Attachment");
 const DatastreamServiceResponse_1 = require("../core/DatastreamServiceResponse");
+const Datastream_1 = require("../core/Datastream");
 const mongodb = require("mongodb");
 const util = require("util");
 const stream = require("stream");
@@ -40,7 +41,6 @@ var Services;
                 'updateNotificationLog',
                 'getRecords',
                 'exportAllPlans',
-                'getAttachments',
                 'addDatastreams',
                 'updateDatastream',
                 'removeDatastream',
@@ -462,18 +462,20 @@ var Services;
             return __awaiter(this, void 0, void 0, function* () {
                 const response = new DatastreamServiceResponse_1.default();
                 response.message = '';
+                let hasFailure = false;
                 for (const fileId of fileIds) {
                     try {
                         yield this.addDatastream(oid, fileId);
-                        const successMessage = `Successfully uploaded: ${fileId}`;
+                        const successMessage = `Successfully uploaded: ${JSON.stringify(fileId)}`;
                         response.message = _.isEmpty(response.message) ? successMessage : `${response.message}\n${successMessage}`;
                     }
                     catch (err) {
-                        response.success = false;
-                        const failureMessage = `Failed to uploead: ${fileId}, error is:\n${JSON.stringify(err)}`;
+                        hasFailure = true;
+                        const failureMessage = `Failed to upload: ${JSON.stringify(fileId)}, error is:\n${JSON.stringify(err)}`;
                         response.message = _.isEmpty(response.message) ? failureMessage : `${response.message}\n${failureMessage}`;
                     }
                 }
+                response.success = !hasFailure;
                 return response;
             });
         }
@@ -490,7 +492,7 @@ var Services;
                         const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
                         _.each(toRemove, (removeAtt) => {
                             if (removeAtt.type == 'attachment') {
-                                removeIds.push(removeAtt.fileId);
+                                removeIds.push(new Datastream_1.default(removeAtt));
                             }
                         });
                     }
@@ -498,7 +500,7 @@ var Services;
                         const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
                         _.each(toAdd, (addAtt) => {
                             if (addAtt.type == 'attachment') {
-                                fileIdsAdded.push(addAtt.fileId);
+                                fileIdsAdded.push(new Datastream_1.default(addAtt));
                             }
                         });
                     }
@@ -510,8 +512,9 @@ var Services;
                 return Rx_1.Observable.of(reqs);
             });
         }
-        removeDatastream(oid, fileId) {
+        removeDatastream(oid, datastream) {
             return __awaiter(this, void 0, void 0, function* () {
+                const fileId = datastream.fileId;
                 const fileName = `${oid}/${fileId}`;
                 const fileRes = yield this.getFileWithName(fileName).toArray();
                 if (!_.isEmpty(fileRes)) {
@@ -531,12 +534,16 @@ var Services;
                 }
             });
         }
-        addDatastream(oid, fileId) {
+        addDatastream(oid, datastream) {
             return __awaiter(this, void 0, void 0, function* () {
+                const fileId = datastream.fileId;
+                sails.log.verbose(`${this.logHeader} addDatastream() -> Meta: ${fileId}`);
+                sails.log.verbose(JSON.stringify(datastream));
+                const metadata = _.merge(datastream.metadata, { redboxOid: oid });
                 const fpath = `${sails.config.record.attachments.stageDir}/${fileId}`;
                 const fileName = `${oid}/${fileId}`;
                 sails.log.verbose(`${this.logHeader} addDatastream() -> Adding: ${fileName}`);
-                yield pipeline(fs.createReadStream(fpath), this.gridFsBucket.openUploadStream(fileName, { metadata: { redboxOid: oid } }));
+                yield pipeline(fs.createReadStream(fpath), this.gridFsBucket.openUploadStream(fileName, { metadata: metadata }));
                 sails.log.verbose(`${this.logHeader} addDatastream() -> Successfully added: ${fileName}`);
             });
         }
