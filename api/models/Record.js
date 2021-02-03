@@ -29,13 +29,11 @@ module.exports = {
     createdAt: false,
     updatedAt: false,
     dateCreated: {
-      type: 'ref',
-      columnType: 'Date',
+      type: 'string',
       autoCreatedAt: true
     },
     lastSaveDate: {
-      type: 'ref',
-      columnType: 'Date',
+      type: 'string',
       autoUpdatedAt: true
     }
   },

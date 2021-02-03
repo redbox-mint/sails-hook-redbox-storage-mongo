@@ -124,6 +124,8 @@ var Services;
                 let response = new StorageServiceResponse_js_1.StorageServiceResponse();
                 response.oid = oid;
                 try {
+                    _.unset(record, 'dateCreated');
+                    _.unset(record, 'lastSaveDate');
                     yield Record.updateOne({ redboxOid: oid }).set(record);
                     response.success = true;
                 }

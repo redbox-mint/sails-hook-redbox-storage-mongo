@@ -137,6 +137,9 @@ export module Services {
       let response = new StorageServiceResponse();
       response.oid = oid;
       try {
+        // Fixes: https://github.com/redbox-mint/redbox-portal/issues/800
+        _.unset(record, 'dateCreated');
+        _.unset(record, 'lastSaveDate');
         await Record.updateOne({redboxOid: oid}).set(record);
         response.success = true;
       } catch (err) {
