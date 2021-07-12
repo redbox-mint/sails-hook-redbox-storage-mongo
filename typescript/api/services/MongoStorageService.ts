@@ -396,7 +396,7 @@ export module Services {
       if (!_.isUndefined(packageType) && !_.isEmpty(packageType)) {
         let typeArray = [];
         _.each(packageType, rType => {
-          typeArray.push({ "packageType": rType });
+          typeArray.push({ "metaMetadata.packageType": rType });
         });
         let types = { "$or": typeArray };
         andArray.push(types);
