@@ -30,11 +30,19 @@
     "@types/lodash": "^4.14.159",
     "@types/mocha": "^8.0.3",
     "chai": "^4.2.0",
+    "fs": "0.0.1-security",
     "mocha": "^8.1.1",
+    "moment": "^2.29.1",
+    "mongodb": "^4.0.1",
+    "rxjs": "^6.6.2",
+    "rxjs-compat": "^6.6.7",
     "sails": "^1.2.5",
-    "typescript": "^4.0.2"
+    "stream": "0.0.2",
+    "typescript": "^4.0.2",
+    "util": "^0.12.4"
   },
   "dependencies": {
+    "@researchdatabox/redbox-core-types": "^1.0.1-beta",
     "json2csv": "^5.0.3",
     "lodash": "^4.17.20",
     "uuid": "8.3.0"

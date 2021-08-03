@@ -1,21 +1,17 @@
 import {
   Observable
 } from 'rxjs/Rx';
-import services = require('../core/CoreService.js');
-import StorageService from '../core/StorageService.js';
-import DatastreamService from '../core/DatastreamService.js';
-import {StorageServiceResponse} from '../core/StorageServiceResponse.js';
+
 import { Sails, Model } from "sails";
 import { v1 as uuidv1 } from 'uuid';
 import moment = require('moment');
-import Attachment from '../core/Attachment';
-import DatastreamServiceResponse from '../core/DatastreamServiceResponse';
-import Datastream from '../core/Datastream';
+
 import mongodb = require('mongodb');
 import util = require('util');
 import stream = require('stream');
 import * as fs from 'fs';
 import { Transform } from 'json2csv';
+import { Services as services, DatastreamService, StorageService, StorageServiceResponse, DatastreamServiceResponse, Datastream, Attachment } from '@researchdatabox/redbox-core-types';
 const { transforms: { unwind, flatten } } = require('json2csv');
 
 const pipeline = util.promisify(stream.pipeline);
@@ -34,7 +30,7 @@ export module Services {
    * Author: <a href='https://github.com/shilob' target='_blank'>Shilo Banihit</a>
    *
    */
-  export class MongoStorageService extends services.Services.Core.Service implements StorageService, DatastreamService {
+  export class MongoStorageService extends services.Core.Service implements StorageService, DatastreamService {
     gridFsBucket: any;
     db: any;
     recordCol: any;
@@ -175,7 +171,7 @@ export module Services {
         dataItem.harvestId = _.get(dataItem, harvestIdFldName, '');
         _.set(dataItem, 'metaMetadata.type', type);
         try {
-          await this.create(null, dataItem, null, null, false, false);
+          await this.create(null, dataItem, null, null);
         } catch (err) {
           failFlag = true;
           sails.log.error(`${this.logHeader} Failed createBatch entry: `);
@@ -331,7 +327,7 @@ export module Services {
         // ready to update
         if (_.get(options, "saveRecord", false)) {
           try {
-            const response = await this.updateMeta(null, oid, record, null, false, false);
+            const response = await this.updateMeta(null, oid, record, null);
           } catch (err) {
             sails.log.error(`${this.logHeader} Failed to update notification log of ${oid}:`);
             sails.log.error(JSON.stringify(err));
@@ -480,7 +476,7 @@ export module Services {
     }
 
 
-    public async addDatastreams(oid: string, fileIds: any[]): Promise<DatastreamServiceResponse> {
+    public async addDatastreams(oid: string, fileIds: Datastream[]): Promise<DatastreamServiceResponse> {
       const response = new DatastreamServiceResponse();
       response.message = '';
       let hasFailure = false;
@@ -589,7 +585,7 @@ export module Services {
     }
 
     public async listDatastreams(oid, fileId) {
-      let query = {"metadata.redboxOid": oid};
+      let query:any = {"metadata.redboxOid": oid};
       if (!_.isEmpty(fileId)) {
         const fileName = `${oid}/${fileId}`;
         query = {filename: fileName};

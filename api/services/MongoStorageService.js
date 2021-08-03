@@ -11,23 +11,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Services = void 0;
 const Rx_1 = require("rxjs/Rx");
-const services = require("../core/CoreService.js");
-const StorageServiceResponse_js_1 = require("../core/StorageServiceResponse.js");
 const uuid_1 = require("uuid");
 const moment = require("moment");
-const Attachment_1 = require("../core/Attachment");
-const DatastreamServiceResponse_1 = require("../core/DatastreamServiceResponse");
-const Datastream_1 = require("../core/Datastream");
 const mongodb = require("mongodb");
 const util = require("util");
 const stream = require("stream");
 const fs = require("fs");
 const json2csv_1 = require("json2csv");
+const redbox_core_types_1 = require("@researchdatabox/redbox-core-types");
 const { transforms: { unwind, flatten } } = require('json2csv');
 const pipeline = util.promisify(stream.pipeline);
 var Services;
 (function (Services) {
-    class MongoStorageService extends services.Services.Core.Service {
+    class MongoStorageService extends redbox_core_types_1.Services.Core.Service {
         constructor() {
             super();
             this._exportedMethods = [
@@ -98,7 +94,7 @@ var Services;
         create(brand, record, recordType, user) {
             return __awaiter(this, void 0, void 0, function* () {
                 sails.log.verbose(`${this.logHeader} create() -> Begin`);
-                let response = new StorageServiceResponse_js_1.StorageServiceResponse();
+                let response = new redbox_core_types_1.StorageServiceResponse();
                 record.redboxOid = this.getUuid();
                 response.oid = record.redboxOid;
                 try {
@@ -121,7 +117,7 @@ var Services;
         }
         updateMeta(brand, oid, record, user) {
             return __awaiter(this, void 0, void 0, function* () {
-                let response = new StorageServiceResponse_js_1.StorageServiceResponse();
+                let response = new redbox_core_types_1.StorageServiceResponse();
                 response.oid = oid;
                 try {
                     _.unset(record, 'dateCreated');
@@ -153,14 +149,14 @@ var Services;
         }
         createBatch(type, data, harvestIdFldName) {
             return __awaiter(this, void 0, void 0, function* () {
-                const response = new StorageServiceResponse_js_1.StorageServiceResponse();
+                const response = new redbox_core_types_1.StorageServiceResponse();
                 response.message = "";
                 let failFlag = false;
                 _.each(data, (dataItem) => __awaiter(this, void 0, void 0, function* () {
                     dataItem.harvestId = _.get(dataItem, harvestIdFldName, '');
                     _.set(dataItem, 'metaMetadata.type', type);
                     try {
-                        yield this.create(null, dataItem, null, null, false, false);
+                        yield this.create(null, dataItem, null, null);
                     }
                     catch (err) {
                         failFlag = true;
@@ -265,7 +261,7 @@ var Services;
         }
         delete(oid) {
             return __awaiter(this, void 0, void 0, function* () {
-                const response = new StorageServiceResponse_js_1.StorageServiceResponse();
+                const response = new redbox_core_types_1.StorageServiceResponse();
                 try {
                     yield Record.destroyOne({ redboxOid: oid });
                     const datastreams = yield this.listDatastreams(oid, null);
@@ -320,7 +316,7 @@ var Services;
                     sails.log.verbose(`======== End update =========`);
                     if (_.get(options, "saveRecord", false)) {
                         try {
-                            const response = yield this.updateMeta(null, oid, record, null, false, false);
+                            const response = yield this.updateMeta(null, oid, record, null);
                         }
                         catch (err) {
                             sails.log.error(`${this.logHeader} Failed to update notification log of ${oid}:`);
@@ -393,7 +389,7 @@ var Services;
                 sails.log.verbose(`Query: ${JSON.stringify(query)}`);
                 sails.log.verbose(`Options: ${JSON.stringify(options)}`);
                 const { items, totalItems } = yield this.runRecordQuery(Record.tableName, query, options);
-                const response = new StorageServiceResponse_js_1.StorageServiceResponse();
+                const response = new redbox_core_types_1.StorageServiceResponse();
                 response.success = true;
                 response.items = items;
                 response.totalItems = totalItems;
@@ -462,7 +458,7 @@ var Services;
         }
         addDatastreams(oid, fileIds) {
             return __awaiter(this, void 0, void 0, function* () {
-                const response = new DatastreamServiceResponse_1.default();
+                const response = new redbox_core_types_1.DatastreamServiceResponse();
                 response.message = '';
                 let hasFailure = false;
                 for (const fileId of fileIds) {
@@ -494,7 +490,7 @@ var Services;
                         const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
                         _.each(toRemove, (removeAtt) => {
                             if (removeAtt.type == 'attachment') {
-                                removeIds.push(new Datastream_1.default(removeAtt));
+                                removeIds.push(new redbox_core_types_1.Datastream(removeAtt));
                             }
                         });
                     }
@@ -502,7 +498,7 @@ var Services;
                         const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
                         _.each(toAdd, (addAtt) => {
                             if (addAtt.type == 'attachment') {
-                                fileIdsAdded.push(new Datastream_1.default(addAtt));
+                                fileIdsAdded.push(new redbox_core_types_1.Datastream(addAtt));
                             }
                         });
                     }
@@ -562,7 +558,7 @@ var Services;
         getDatastream(oid, fileId) {
             const fileName = `${oid}/${fileId}`;
             sails.log.verbose(`${this.logHeader} getDatastream() -> Getting: ${fileName}`);
-            const response = new Attachment_1.default();
+            const response = new redbox_core_types_1.Attachment();
             response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName);
             return Rx_1.Observable.of(response);
         }
