@@ -11,14 +11,14 @@ import util = require('util');
 import stream = require('stream');
 import * as fs from 'fs';
 import { Transform } from 'json2csv';
-import { Services as services, DatastreamService, StorageService, StorageServiceResponse, DatastreamServiceResponse, Datastream, Attachment } from '@researchdatabox/redbox-core-types';
+import { Services as services, DatastreamService, StorageService, StorageServiceResponse, DatastreamServiceResponse, Datastream, Attachment, RecordAuditModel } from '@researchdatabox/redbox-core-types';
 const { transforms: { unwind, flatten } } = require('json2csv');
 
 const pipeline = util.promisify(stream.pipeline);
 
 declare var sails: Sails;
 declare var _;
-declare var Record:Model, RecordTypesService, FormsService;
+declare var Record:Model, RecordTypesService, FormsService, RecordAudit;
 
 export module Services {
   /**
@@ -52,7 +52,8 @@ export module Services {
       'addDatastream',
       'addAndRemoveDatastreams',
       'getDatastream',
-      'listDatastreams'
+      'listDatastreams',
+      'createRecordAudit'
     ];
 
     constructor() {
@@ -594,6 +595,29 @@ export module Services {
       sails.log.verbose(JSON.stringify(query));
       return this.gridFsBucket.find(query, {}).toArray();
     }
+
+    public async createRecordAudit(recordAudit:RecordAuditModel): Promise<any> {
+      let response = new StorageServiceResponse();
+      try {
+        sails.log.verbose(`${this.logHeader} Saving to DB...`);
+         await RecordAudit.create(recordAudit);
+         //TODO: fix type model to have the _id attribute
+         let savedRecordAudit:any = recordAudit;
+        response.oid = savedRecordAudit._id;
+        response.success = true;
+        sails.log.verbose(`${this.logHeader} Record Audit created...`);
+      } catch (err) {
+        sails.log.error(`${this.logHeader} Failed to create Record Audit:`);
+        sails.log.error(JSON.stringify(err));
+        response.success = false;
+        response.message = err.message;
+        return response;
+      }
+      sails.log.verbose(JSON.stringify(response));
+      sails.log.verbose(`${this.logHeader} create() -> End`);
+      return response;
+    }
+    
     /**
      * Returns a MongoDB cursor
      * @author <a target='_' href='https://github.com/shilob'>Shilo Banihit</a>

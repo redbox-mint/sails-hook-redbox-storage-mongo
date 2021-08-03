@@ -43,7 +43,8 @@ var Services;
                 'addDatastream',
                 'addAndRemoveDatastreams',
                 'getDatastream',
-                'listDatastreams'
+                'listDatastreams',
+                'createRecordAudit'
             ];
             this.logHeader = 'MongoStorageService::';
             let that = this;
@@ -572,6 +573,29 @@ var Services;
                 sails.log.verbose(`${this.logHeader} listDatastreams() -> Listing attachments of oid: ${oid}`);
                 sails.log.verbose(JSON.stringify(query));
                 return this.gridFsBucket.find(query, {}).toArray();
+            });
+        }
+        createRecordAudit(recordAudit) {
+            return __awaiter(this, void 0, void 0, function* () {
+                let response = new redbox_core_types_1.StorageServiceResponse();
+                try {
+                    sails.log.verbose(`${this.logHeader} Saving to DB...`);
+                    yield RecordAudit.create(recordAudit);
+                    let savedRecordAudit = recordAudit;
+                    response.oid = savedRecordAudit._id;
+                    response.success = true;
+                    sails.log.verbose(`${this.logHeader} Record Audit created...`);
+                }
+                catch (err) {
+                    sails.log.error(`${this.logHeader} Failed to create Record Audit:`);
+                    sails.log.error(JSON.stringify(err));
+                    response.success = false;
+                    response.message = err.message;
+                    return response;
+                }
+                sails.log.verbose(JSON.stringify(response));
+                sails.log.verbose(`${this.logHeader} create() -> End`);
+                return response;
             });
         }
         getFileWithName(fileName, options = { limit: 1 }) {
