@@ -333,7 +333,7 @@ var Services;
                 return record;
             });
         }
-        getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined) {
+        getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterString = undefined, filterFields = undefined) {
             return __awaiter(this, void 0, void 0, function* () {
                 let query = {
                     "metaMetadata.brandId": brand.id
@@ -385,6 +385,13 @@ var Services;
                 }
                 if (workflowState != undefined) {
                     query["workflow.stage"] = workflowState;
+                }
+                if (!_.isEmpty(filterString) && !_.isEmpty(filterFields)) {
+                    for (let filterField of filterFields) {
+                        let filterQuery = {};
+                        filterQuery[filterField] = new RegExp(`.*${filterString}.*`);
+                        andArray.push(filterQuery);
+                    }
                 }
                 query['$and'] = andArray;
                 sails.log.verbose(`Query: ${JSON.stringify(query)}`);

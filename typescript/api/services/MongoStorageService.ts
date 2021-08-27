@@ -343,7 +343,7 @@ export module Services {
       return record;
     }
 
-    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort=undefined) {
+    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort=undefined, filterFields = undefined, filterString = undefined) {
       // BrandId ...
       let query = {
         "metaMetadata.brandId": brand.id
@@ -402,7 +402,17 @@ export module Services {
       if (workflowState != undefined) {
         query["workflow.stage"] = workflowState;
       }
+      if (!_.isEmpty(filterString) && !_.isEmpty(filterFields)) {
+        let escapedFilterString = this.escapeRegExp(filterString)
+        for (let filterField of filterFields) {
+            let filterQuery = {};
+            filterQuery[filterField] = new RegExp(`.*${filterString}.*`);
+            andArray.push(filterQuery);
+        }
+    }
+
       query['$and'] = andArray;
+
       sails.log.verbose(`Query: ${JSON.stringify(query)}`);
       sails.log.verbose(`Options: ${JSON.stringify(options)}`);
       const {items, totalItems} = await this.runRecordQuery(Record.tableName, query, options);
@@ -411,6 +421,10 @@ export module Services {
       response.items = items;
       response.totalItems = totalItems;
       return response;
+    }
+
+    private escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     protected async runRecordQuery(colName, query, options) {
