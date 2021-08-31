@@ -1,6 +1,6 @@
 {
   "name": "@researchdatabox/sails-hook-redbox-storage-mongo",
-  "version": "1.1.2-alpha",
+  "version": "1.1.3-alpha",
   "description": "A MongoDB storage plugin for ReDBox.",
   "main": "index.js",
   "sails": {
@@ -42,7 +42,7 @@
     "util": "^0.12.4"
   },
   "dependencies": {
-    "@researchdatabox/redbox-core-types": "^1.0.1-beta",
+    "@researchdatabox/redbox-core-types": "^1.0.3-beta",
     "json2csv": "^5.0.3",
     "lodash": "^4.17.20",
     "uuid": "8.3.0"

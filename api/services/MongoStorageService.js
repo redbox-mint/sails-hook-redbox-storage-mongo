@@ -333,7 +333,7 @@ var Services;
                 return record;
             });
         }
-        getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterString = undefined, filterFields = undefined) {
+        getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined) {
             return __awaiter(this, void 0, void 0, function* () {
                 let query = {
                     "metaMetadata.brandId": brand.id
@@ -387,6 +387,7 @@ var Services;
                     query["workflow.stage"] = workflowState;
                 }
                 if (!_.isEmpty(filterString) && !_.isEmpty(filterFields)) {
+                    let escapedFilterString = this.escapeRegExp(filterString);
                     for (let filterField of filterFields) {
                         let filterQuery = {};
                         filterQuery[filterField] = new RegExp(`.*${filterString}.*`);
@@ -403,6 +404,9 @@ var Services;
                 response.totalItems = totalItems;
                 return response;
             });
+        }
+        escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
         runRecordQuery(colName, query, options) {
             return __awaiter(this, void 0, void 0, function* () {
