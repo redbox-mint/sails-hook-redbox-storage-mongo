@@ -13,6 +13,8 @@ import * as fs from 'fs';
 import { Transform } from 'json2csv';
 import { Services as services, DatastreamService, StorageService, StorageServiceResponse, DatastreamServiceResponse, Datastream, Attachment, RecordAuditModel } from '@researchdatabox/redbox-core-types';
 const { transforms: { unwind, flatten } } = require('json2csv');
+const ExportJSONTransformer = require('../../transformer/ExportJSONTransformer')
+
 
 const pipeline = util.promisify(stream.pipeline);
 
@@ -431,6 +433,27 @@ export module Services {
       return { items: await this.recordCol.find(query, options).toArray(), totalItems: await this.recordCol.count(query) } ;
     }
 
+    private async * fetchAllRecords(query, options, stringifyJSON:boolean = false) {
+      let skip = 0;
+      let limit = options.limit;
+      options.skip = skip;
+      let result =  await this.recordCol.find(query, options).toArray();
+      
+      while(result.length > 0) {
+        for(let record of result) {
+          if(stringifyJSON) {
+            yield JSON.stringify(record);
+          } else {
+            yield record;
+          }
+        }
+        skip = skip + limit;
+        options.skip = skip;
+        result =  await this.recordCol.find(query, options).toArray();
+        
+      }
+    }
+
     public exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType): stream.Readable {
       let andArray = [];
       let query = {
@@ -454,14 +477,15 @@ export module Services {
       if (!_.isEmpty(modAfter)) {
         andArray.push({
           lastSaveDate: {
-            '$gte': new Date(`${modAfter}T00:00:00Z`)
+            '$gte': `${modAfter}`
           }
         });
       }
       if (!_.isEmpty(modBefore)) {
+        let modBeforeString = moment(modBefore, 'YYYY-MM-DD' ).add(1,'days').format('YYYY-MM-DD')
         andArray.push({
           lastSaveDate: {
-            '$lte': new Date(`${modBefore}T23:59:59Z`)
+            '$lte': `${modBeforeString}`
           }
         });
       }
@@ -472,9 +496,12 @@ export module Services {
         const opts = {transforms: [flatten()]};
         const transformOpts = { objectMode: true };
         const json2csv = new Transform(opts, transformOpts);
-        return this.recordCol.find(query, options).stream().pipe(json2csv);
+        return stream.Readable.from(this.fetchAllRecords(query, options)).pipe(json2csv);
       }
-      return this.recordCol.find(query, options).stream();
+    
+      //TODO: incorporate object mode so that JSON.stringify is handled in the Transformer rather than fetch 
+      const jsonTransformer = new ExportJSONTransformer(recType,modBefore,modAfter);
+      return stream.Readable.from(this.fetchAllRecords(query, options, true)).pipe(jsonTransformer);
     }
 
     protected getRoleNames(roles, brand) {

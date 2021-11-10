@@ -26,6 +26,7 @@
   "author": "QCIF Engineering dev@redboxresearchdata.com.au",
   "license": "GPL-3.0",
   "devDependencies": {
+    "@researchdatabox/redbox-core-types": "^1.0.3-beta",
     "@types/chai": "^4.2.12",
     "@types/lodash": "^4.14.159",
     "@types/mocha": "^8.0.3",
@@ -42,7 +43,6 @@
     "util": "^0.12.4"
   },
   "dependencies": {
-    "@researchdatabox/redbox-core-types": "^1.0.3-beta",
     "json2csv": "^5.0.3",
     "lodash": "^4.17.20",
     "uuid": "8.3.0"

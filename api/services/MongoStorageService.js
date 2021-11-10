@@ -8,6 +8,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __await = (this && this.__await) || function (v) { return this instanceof __await ? (this.v = v, this) : new __await(v); }
+var __asyncGenerator = (this && this.__asyncGenerator) || function (thisArg, _arguments, generator) {
+    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+    var g = generator.apply(thisArg, _arguments || []), i, q = [];
+    return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+    function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+    function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+    function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r); }
+    function fulfill(value) { resume("next", value); }
+    function reject(value) { resume("throw", value); }
+    function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Services = void 0;
 const Rx_1 = require("rxjs/Rx");
@@ -20,6 +32,7 @@ const fs = require("fs");
 const json2csv_1 = require("json2csv");
 const redbox_core_types_1 = require("@researchdatabox/redbox-core-types");
 const { transforms: { unwind, flatten } } = require('json2csv');
+const ExportJSONTransformer = require('../../transformer/ExportJSONTransformer');
 const pipeline = util.promisify(stream.pipeline);
 var Services;
 (function (Services) {
@@ -413,6 +426,30 @@ var Services;
                 return { items: yield this.recordCol.find(query, options).toArray(), totalItems: yield this.recordCol.count(query) };
             });
         }
+        fetchAllRecords(query, options, stringifyJSON = false) {
+            return __asyncGenerator(this, arguments, function* fetchAllRecords_1() {
+                let skip = 0;
+                let limit = options.limit;
+                options.skip = skip;
+                sails.log.error(JSON.stringify(query));
+                sails.log.error(JSON.stringify(options));
+                let result = yield __await(this.recordCol.find(query, options).toArray());
+                sails.log.error(result);
+                while (result.length > 0) {
+                    for (let record of result) {
+                        if (stringifyJSON) {
+                            yield yield __await(JSON.stringify(record));
+                        }
+                        else {
+                            yield yield __await(record);
+                        }
+                    }
+                    skip = skip + limit;
+                    options.skip = skip;
+                    result = yield __await(this.recordCol.find(query, options).toArray());
+                }
+            });
+        }
         exportAllPlans(username, roles, brand, format, modBefore, modAfter, recType) {
             let andArray = [];
             let query = {
@@ -428,7 +465,7 @@ var Services;
             };
             andArray.push(permissions);
             const options = {
-                limit: _.toNumber(sails.config.record.export.maxRecords),
+                limit: 2,
                 sort: {
                     lastSaveDate: -1
                 }
@@ -436,14 +473,15 @@ var Services;
             if (!_.isEmpty(modAfter)) {
                 andArray.push({
                     lastSaveDate: {
-                        '$gte': new Date(`${modAfter}T00:00:00Z`)
+                        '$gte': `${modAfter}`
                     }
                 });
             }
             if (!_.isEmpty(modBefore)) {
+                let modBeforeString = moment(modBefore, 'YYYY-MM-DD').add(1, 'days').format('YYYY-MM-DD');
                 andArray.push({
                     lastSaveDate: {
-                        '$lte': new Date(`${modBefore}T23:59:59Z`)
+                        '$lte': `${modBeforeString}`
                     }
                 });
             }
@@ -454,9 +492,10 @@ var Services;
                 const opts = { transforms: [flatten()] };
                 const transformOpts = { objectMode: true };
                 const json2csv = new json2csv_1.Transform(opts, transformOpts);
-                return this.recordCol.find(query, options).stream().pipe(json2csv);
+                return stream.Readable.from(this.fetchAllRecords(query, options)).pipe(json2csv);
             }
-            return this.recordCol.find(query, options).stream();
+            const jsonTransformer = new ExportJSONTransformer(recType, modBefore, modAfter);
+            return stream.Readable.from(this.fetchAllRecords(query, options, true)).pipe(jsonTransformer);
         }
         getRoleNames(roles, brand) {
             var roleNames = [];
