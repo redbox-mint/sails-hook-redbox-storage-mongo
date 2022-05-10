@@ -431,10 +431,7 @@ var Services;
                 let skip = 0;
                 let limit = options.limit;
                 options.skip = skip;
-                sails.log.error(JSON.stringify(query));
-                sails.log.error(JSON.stringify(options));
                 let result = yield __await(this.recordCol.find(query, options).toArray());
-                sails.log.error(result);
                 while (result.length > 0) {
                     for (let record of result) {
                         if (stringifyJSON) {
@@ -465,7 +462,7 @@ var Services;
             };
             andArray.push(permissions);
             const options = {
-                limit: 2,
+                limit: _.toNumber(sails.config.record.export.maxRecords),
                 sort: {
                     lastSaveDate: -1
                 }
@@ -607,11 +604,19 @@ var Services;
             });
         }
         getDatastream(oid, fileId) {
-            const fileName = `${oid}/${fileId}`;
-            sails.log.verbose(`${this.logHeader} getDatastream() -> Getting: ${fileName}`);
-            const response = new redbox_core_types_1.Attachment();
-            response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName);
-            return Rx_1.Observable.of(response);
+            return Rx_1.Observable.fromPromise(this.getDatastreamAsync(oid, fileId));
+        }
+        getDatastreamAsync(oid, fileId) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const fileName = `${oid}/${fileId}`;
+                const fileRes = yield this.getFileWithName(fileName).toArray();
+                if (_.isArray(fileRes) && fileRes.length === 0) {
+                    throw new Error(TranslationService.t('attachment-not-found'));
+                }
+                const response = new redbox_core_types_1.Attachment();
+                response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName);
+                return response;
+            });
         }
         listDatastreams(oid, fileId) {
             return __awaiter(this, void 0, void 0, function* () {

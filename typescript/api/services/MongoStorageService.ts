@@ -20,7 +20,7 @@ const pipeline = util.promisify(stream.pipeline);
 
 declare var sails: Sails;
 declare var _;
-declare var Record:Model, RecordTypesService, FormsService, RecordAudit;
+declare var Record:Model, RecordTypesService, TranslationService, FormsService, RecordAudit;
 
 export module Services {
   /**
@@ -619,11 +619,18 @@ export module Services {
     }
 
     public getDatastream(oid, fileId): any {
+      return Observable.fromPromise(this.getDatastreamAsync(oid,fileId));
+    }
+
+    private async getDatastreamAsync(oid, fileId): Promise<any> {
       const fileName = `${oid}/${fileId}`;
-      sails.log.verbose(`${this.logHeader} getDatastream() -> Getting: ${fileName}`);
+      const fileRes = await this.getFileWithName(fileName).toArray();
+      if (_.isArray(fileRes) && fileRes.length === 0) {
+        throw new Error (TranslationService.t('attachment-not-found'))
+      }
       const response = new Attachment();
       response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName)
-      return Observable.of(response);
+      return response;
     }
 
     public async listDatastreams(oid, fileId) {
