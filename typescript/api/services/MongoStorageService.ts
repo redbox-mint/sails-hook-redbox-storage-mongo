@@ -11,7 +11,7 @@ import util = require('util');
 import stream = require('stream');
 import * as fs from 'fs';
 import { Transform } from 'json2csv';
-import { Services as services, DatastreamService, StorageService, StorageServiceResponse, DatastreamServiceResponse, Datastream, Attachment, RecordAuditModel } from '@researchdatabox/redbox-core-types';
+import { Services as services, DatastreamService, StorageService, StorageServiceResponse, DatastreamServiceResponse, Datastream, Attachment, RecordAuditModel, RecordAuditParams } from '@researchdatabox/redbox-core-types';
 const { transforms: { unwind, flatten } } = require('json2csv');
 const ExportJSONTransformer = require('../../transformer/ExportJSONTransformer')
 
@@ -55,7 +55,8 @@ export module Services {
       'addAndRemoveDatastreams',
       'getDatastream',
       'listDatastreams',
-      'createRecordAudit'
+      'createRecordAudit',
+      'getRecordAudit'
     ];
 
     constructor() {
@@ -438,7 +439,7 @@ export module Services {
       let limit = options.limit;
       options.skip = skip;
       let result =  await this.recordCol.find(query, options).toArray();
-      
+
       while(result.length > 0) {
         for(let record of result) {
           if(stringifyJSON) {
@@ -450,7 +451,7 @@ export module Services {
         skip = skip + limit;
         options.skip = skip;
         result =  await this.recordCol.find(query, options).toArray();
-        
+
       }
     }
 
@@ -498,8 +499,8 @@ export module Services {
         const json2csv = new Transform(opts, transformOpts);
         return stream.Readable.from(this.fetchAllRecords(query, options)).pipe(json2csv);
       }
-    
-      //TODO: incorporate object mode so that JSON.stringify is handled in the Transformer rather than fetch 
+
+      //TODO: incorporate object mode so that JSON.stringify is handled in the Transformer rather than fetch
       const jsonTransformer = new ExportJSONTransformer(recType,modBefore,modAfter);
       return stream.Readable.from(this.fetchAllRecords(query, options, true)).pipe(jsonTransformer);
     }
@@ -665,7 +666,38 @@ export module Services {
       sails.log.verbose(`${this.logHeader} create() -> End`);
       return response;
     }
-    
+
+    public async getRecordAudit(params: RecordAuditParams): Promise<any> {
+
+            const oid = params['oid'];
+            const dateFrom = params['dateFrom'];
+            const dateTo = params['dateTo'];
+
+            if (_.isEmpty(oid)) {
+              const msg = `${this.logHeader} getMeta() -> refusing to search using an empty OID`;
+              sails.log.error(msg);
+              throw new Error(msg);
+            }
+
+            var criteria = { "redboxOid": oid };
+
+            if(_.isDate(dateFrom)) {
+                criteria['createdAt'] = {['>='] : dateFrom };
+            }
+
+            if(_.isDate(dateTo)) {
+                if(_.isUndefined(criteria['createdAt'])) {
+                    criteria['createdAt'] = {};
+                }
+                criteria['createdAt']['<='] = dateTo;
+                sails.log.verbose(criteria);
+            }
+
+          sails.log.verbose(`${this.logHeader} finding: `);
+          sails.log.verbose(JSON.stringify(criteria));
+          return RecordAudit.find(criteria);
+  }
+
     /**
      * Returns a MongoDB cursor
      * @author <a target='_' href='https://github.com/shilob'>Shilo Banihit</a>
