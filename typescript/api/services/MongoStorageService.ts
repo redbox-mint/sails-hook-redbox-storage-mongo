@@ -56,7 +56,8 @@ export module Services {
       'getDatastream',
       'listDatastreams',
       'createRecordAudit',
-      'getRecordAudit'
+      'getRecordAudit',
+      'exists'
     ];
 
     constructor() {
@@ -65,6 +66,9 @@ export module Services {
       let that = this;
       sails.on('ready', function() {
         that.init();
+        sails.emit('hook:redbox:storage:ready');
+        sails.emit('hook:redbox:datastream:ready');
+        sails.log.verbose(`${that.logHeader} Ready!`);
       });
     }
 
@@ -619,8 +623,8 @@ export module Services {
       }
     }
 
-    public getDatastream(oid, fileId): any {
-      return Observable.fromPromise(this.getDatastreamAsync(oid,fileId));
+    public async getDatastream(oid, fileId): Promise<any> {
+      return this.getDatastreamAsync(oid,fileId);
     }
 
     private async getDatastreamAsync(oid, fileId): Promise<any> {
@@ -709,7 +713,15 @@ export module Services {
       return this.gridFsBucket.find({filename: fileName}, options);
     }
 
-
+    /**
+     * Returns true if record with oid exists.
+     * 
+     * @param oid 
+     * @returns 
+     */
+    public async exists(oid: string): Promise<boolean> {
+      return await Record.count({redboxOid: oid}) > 0;
+    }
   }
 
 }
