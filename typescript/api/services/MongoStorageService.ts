@@ -350,7 +350,12 @@ export module Services {
       return record;
     }
 
-    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort=undefined, filterFields = undefined, filterString = undefined) {
+    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort=undefined, filterFields = undefined, filterString = undefined, filterMode = undefined) {
+      
+      //Default to regex when filterMode is not set to maintain pre existing functionality
+      if(_.isUndefined(filterMode) || _.isNull(filterMode) || _.isEmpty(filterMode)){
+        filterMode = 'regex';
+      } 
       // BrandId ...
       let query = {
         "metaMetadata.brandId": brand.id
@@ -410,13 +415,21 @@ export module Services {
         query["workflow.stage"] = workflowState;
       }
       if (!_.isEmpty(filterString) && !_.isEmpty(filterFields)) {
-        let escapedFilterString = this.escapeRegExp(filterString)
+        let escapedFilterString = this.escapeRegExp(filterString);
+        sails.log.verbose('escapedFilterString '+ escapedFilterString);
         for (let filterField of filterFields) {
             let filterQuery = {};
-            filterQuery[filterField] = new RegExp(`.*${filterString}.*`);
+            if(filterMode == 'equal') {
+              filterQuery[filterField] = filterString;
+            } else if (filterMode == 'regex') {
+              filterQuery[filterField] = new RegExp(`.*${escapedFilterString}.*`);
+              //regex expressions are printed as empty objects {} when using JSON.stringify
+              //hence intentionally not using JSON.stringify in below logging print out 
+              sails.log.verbose(filterQuery);
+            }
             andArray.push(filterQuery);
         }
-    }
+      }
 
       query['$and'] = andArray;
 
