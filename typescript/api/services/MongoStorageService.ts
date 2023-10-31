@@ -20,7 +20,7 @@ const pipeline = util.promisify(stream.pipeline);
 
 declare var sails: Sails;
 declare var _;
-declare var Record:Model, RecordTypesService, TranslationService, FormsService, RecordAudit;
+declare var Record: Model, RecordTypesService, TranslationService, FormsService, RecordAudit;
 
 export module Services {
   /**
@@ -64,7 +64,7 @@ export module Services {
       super();
       this.logHeader = 'MongoStorageService::';
       let that = this;
-      sails.on('ready', function() {
+      sails.on('ready', function () {
         that.init();
         sails.emit('hook:redbox:storage:ready');
         sails.emit('hook:redbox:datastream:ready');
@@ -72,7 +72,7 @@ export module Services {
       });
     }
 
-    private getUuid():string {
+    private getUuid(): string {
       return uuidv1().replace(/-/g, '');
     }
 
@@ -80,15 +80,15 @@ export module Services {
       this.db = Record.getDatastore().manager;
       // check if the collection exists ...
       try {
-        const collectionInfo = await this.db.collection(Record.tableName, {strict:true});
+        const collectionInfo = await this.db.collection(Record.tableName, { strict: true });
         sails.log.verbose(`${this.logHeader} Collection '${Record.tableName}' info:`);
         sails.log.verbose(JSON.stringify(collectionInfo));
       } catch (err) {
         sails.log.verbose(`Collection doesn't exist, creating: ${Record.tableName}`);
         const uuid = this.getUuid();
-        const initRec = {redboxOid: uuid};
+        const initRec = { redboxOid: uuid };
         await Record.create(initRec);
-        await Record.destroyOne({redboxOid: uuid});
+        await Record.destroyOne({ redboxOid: uuid });
       }
       this.gridFsBucket = new mongodb.GridFSBucket(this.db);
       this.recordCol = await this.db.collection(Record.tableName);
@@ -113,7 +113,7 @@ export module Services {
       }
     }
 
-    public async create(brand, record, recordType, user?):Promise<any> {
+    public async create(brand, record, recordType, user?): Promise<any> {
       sails.log.verbose(`${this.logHeader} create() -> Begin`);
       let response = new StorageServiceResponse();
       // Create DB entry
@@ -144,7 +144,7 @@ export module Services {
         // Fixes: https://github.com/redbox-mint/redbox-portal/issues/800
         _.unset(record, 'dateCreated');
         _.unset(record, 'lastSaveDate');
-        await Record.updateOne({redboxOid: oid}).set(record);
+        await Record.updateOne({ redboxOid: oid }).set(record);
         response.success = true;
       } catch (err) {
         sails.log.error(`${this.logHeader} Failed to save update to MongoDB:`);
@@ -165,7 +165,7 @@ export module Services {
         sails.log.error(msg);
         throw new Error(msg);
       }
-      const criteria = {redboxOid: oid};
+      const criteria = { redboxOid: oid };
       sails.log.verbose(`${this.logHeader} finding: `);
       sails.log.verbose(JSON.stringify(criteria));
       return Record.findOne(criteria);
@@ -194,7 +194,7 @@ export module Services {
     }
 
     public provideUserAccessAndRemovePendingAccess(oid, userid, pendingValue): void {
-      const batchFn = async ()=> {
+      const batchFn = async () => {
         const metadata = await this.getMeta(oid);
         // remove pending edit access and add real edit access with userid
         var pendingEditArray = metadata['authorization']['editPending'];
@@ -230,7 +230,7 @@ export module Services {
       batchFn();
     }
 
-    public async getRelatedRecords(oid, brand, recordTypeName:any = null, mappingContext: any = null) {
+    public async getRelatedRecords(oid, brand, recordTypeName: any = null, mappingContext: any = null) {
       let record = await this.getMeta(oid);
       if (_.isEmpty(recordTypeName)) {
         recordTypeName = record['metaMetadata']['type'];
@@ -251,13 +251,13 @@ export module Services {
           sails.log.verbose(JSON.stringify(relationship));
           const targetRecordType = relationship['recordType'];
           // retrieve the related records from the DB...
-          const criteria:any = {};
+          const criteria: any = {};
           criteria['metaMetadata.type'] = targetRecordType;
           criteria[relationship['foreignField']] = oid;
           sails.log.verbose(`${this.logHeader} Finding related records criteria:`);
           sails.log.verbose(JSON.stringify(criteria));
 
-          const relatedRecords = await Record.find(criteria).meta({enableExperimentalDeepTargets:true});
+          const relatedRecords = await Record.find(criteria).meta({ enableExperimentalDeepTargets: true });
           sails.log.verbose(`${this.logHeader} Got related records:`);
           sails.log.verbose(JSON.stringify(relatedRecords));
           if (_.size(relatedRecords) > 0) {
@@ -287,7 +287,7 @@ export module Services {
     public async delete(oid) {
       const response = new StorageServiceResponse();
       try {
-        await Record.destroyOne({redboxOid: oid});
+        await Record.destroyOne({ redboxOid: oid });
         const datastreams = await this.listDatastreams(oid, null);
         if (_.size(datastreams) > 0) {
           _.each(datastreams, (file) => {
@@ -350,12 +350,12 @@ export module Services {
       return record;
     }
 
-    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort=undefined, filterFields = undefined, filterString = undefined, filterMode = undefined) {
-      
+    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined, filterMode = undefined) {
+
       //Default to regex when filterMode is not set to maintain pre existing functionality
-      if(_.isUndefined(filterMode) || _.isNull(filterMode) || _.isEmpty(filterMode)){
+      if (_.isUndefined(filterMode) || _.isNull(filterMode) || _.isEmpty(filterMode)) {
         filterMode = 'regex';
-      } 
+      }
       // BrandId ...
       let query = {
         "metaMetadata.brandId": brand.id
@@ -416,18 +416,18 @@ export module Services {
       }
       if (!_.isEmpty(filterString) && !_.isEmpty(filterFields)) {
         let escapedFilterString = this.escapeRegExp(filterString);
-        sails.log.verbose('escapedFilterString '+ escapedFilterString);
+        sails.log.verbose('escapedFilterString ' + escapedFilterString);
         for (let filterField of filterFields) {
-            let filterQuery = {};
-            if(filterMode == 'equal') {
-              filterQuery[filterField] = filterString;
-            } else if (filterMode == 'regex') {
-              filterQuery[filterField] = new RegExp(`.*${escapedFilterString}.*`);
-              //regex expressions are printed as empty objects {} when using JSON.stringify
-              //hence intentionally not using JSON.stringify in below logging print out 
-              sails.log.verbose(filterQuery);
-            }
-            andArray.push(filterQuery);
+          let filterQuery = {};
+          if (filterMode == 'equal') {
+            filterQuery[filterField] = filterString;
+          } else if (filterMode == 'regex') {
+            filterQuery[filterField] = new RegExp(`.*${escapedFilterString}.*`);
+            //regex expressions are printed as empty objects {} when using JSON.stringify
+            //hence intentionally not using JSON.stringify in below logging print out 
+            sails.log.verbose(filterQuery);
+          }
+          andArray.push(filterQuery);
         }
       }
 
@@ -435,7 +435,7 @@ export module Services {
 
       sails.log.verbose(`Query: ${JSON.stringify(query)}`);
       sails.log.verbose(`Options: ${JSON.stringify(options)}`);
-      const {items, totalItems} = await this.runRecordQuery(Record.tableName, query, options);
+      const { items, totalItems } = await this.runRecordQuery(Record.tableName, query, options);
       const response = new StorageServiceResponse();
       response.success = true;
       response.items = items;
@@ -448,18 +448,18 @@ export module Services {
     }
 
     protected async runRecordQuery(colName, query, options) {
-      return { items: await this.recordCol.find(query, options).toArray(), totalItems: await this.recordCol.count(query) } ;
+      return { items: await this.recordCol.find(query, options).toArray(), totalItems: await this.recordCol.count(query) };
     }
 
-    private async * fetchAllRecords(query, options, stringifyJSON:boolean = false) {
+    private async * fetchAllRecords(query, options, stringifyJSON: boolean = false) {
       let skip = 0;
       let limit = options.limit;
       options.skip = skip;
-      let result =  await this.recordCol.find(query, options).toArray();
+      let result = await this.recordCol.find(query, options).toArray();
 
-      while(result.length > 0) {
-        for(let record of result) {
-          if(stringifyJSON) {
+      while (result.length > 0) {
+        for (let record of result) {
+          if (stringifyJSON) {
             yield JSON.stringify(record);
           } else {
             yield record;
@@ -467,7 +467,7 @@ export module Services {
         }
         skip = skip + limit;
         options.skip = skip;
-        result =  await this.recordCol.find(query, options).toArray();
+        result = await this.recordCol.find(query, options).toArray();
 
       }
     }
@@ -500,7 +500,7 @@ export module Services {
         });
       }
       if (!_.isEmpty(modBefore)) {
-        let modBeforeString = moment(modBefore, 'YYYY-MM-DD' ).add(1,'days').format('YYYY-MM-DD')
+        let modBeforeString = moment(modBefore, 'YYYY-MM-DD').add(1, 'days').format('YYYY-MM-DD')
         andArray.push({
           lastSaveDate: {
             '$lte': `${modBeforeString}`
@@ -511,14 +511,14 @@ export module Services {
       sails.log.verbose(`Query: ${JSON.stringify(query)}`);
       sails.log.verbose(`Options: ${JSON.stringify(options)}`);
       if (format == 'csv') {
-        const opts = {transforms: [flatten()]};
+        const opts = { transforms: [flatten()] };
         const transformOpts = { objectMode: true };
         const json2csv = new Transform(opts, transformOpts);
         return stream.Readable.from(this.fetchAllRecords(query, options)).pipe(json2csv);
       }
 
       //TODO: incorporate object mode so that JSON.stringify is handled in the Transformer rather than fetch
-      const jsonTransformer = new ExportJSONTransformer(recType,modBefore,modAfter);
+      const jsonTransformer = new ExportJSONTransformer(recType, modBefore, modAfter);
       return stream.Readable.from(this.fetchAllRecords(query, options, true)).pipe(jsonTransformer);
     }
 
@@ -544,11 +544,11 @@ export module Services {
         try {
           await this.addDatastream(oid, fileId);
           const successMessage = `Successfully uploaded: ${JSON.stringify(fileId)}`;
-          response.message = _.isEmpty(response.message) ? successMessage :  `${response.message}\n${successMessage}`;
+          response.message = _.isEmpty(response.message) ? successMessage : `${response.message}\n${successMessage}`;
         } catch (err) {
           hasFailure = true;
           const failureMessage = `Failed to upload: ${JSON.stringify(fileId)}, error is:\n${JSON.stringify(err)}`;
-          response.message = _.isEmpty(response.message) ? failureMessage :  `${response.message}\n${failureMessage}`;
+          response.message = _.isEmpty(response.message) ? failureMessage : `${response.message}\n${failureMessage}`;
         }
       }
       response.success = !hasFailure;
@@ -558,38 +558,38 @@ export module Services {
     public updateDatastream(oid: string, record, newMetadata, fileRoot, fileIdsAdded): any {
       // loop thru the attachment fields and determine if we need to add or remove
       return FormsService.getFormByName(record.metaMetadata.form, true)
-      .flatMap(form => {
-        const reqs = [];
-        record.metaMetadata.attachmentFields = form.attachmentFields;
-        _.each(form.attachmentFields, async (attField) => {
-          const oldAttachments = record.metadata[attField];
-          const newAttachments = newMetadata[attField];
-          const removeIds = [];
-          // process removals
-          if (!_.isUndefined(oldAttachments) && !_.isNull(oldAttachments) && !_.isNull(newAttachments)) {
-            const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
-            _.each(toRemove, (removeAtt) => {
-              if (removeAtt.type == 'attachment') {
-                removeIds.push(new Datastream(removeAtt));
-              }
-            });
+        .flatMap(form => {
+          const reqs = [];
+          record.metaMetadata.attachmentFields = form.attachmentFields;
+          _.each(form.attachmentFields, async (attField) => {
+            const oldAttachments = record.metadata[attField];
+            const newAttachments = newMetadata[attField];
+            const removeIds = [];
+            // process removals
+            if (!_.isUndefined(oldAttachments) && !_.isNull(oldAttachments) && !_.isNull(newAttachments)) {
+              const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
+              _.each(toRemove, (removeAtt) => {
+                if (removeAtt.type == 'attachment') {
+                  removeIds.push(new Datastream(removeAtt));
+                }
+              });
+            }
+            // process additions
+            if (!_.isUndefined(newAttachments) && !_.isNull(newAttachments)) {
+              const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
+              _.each(toAdd, (addAtt) => {
+                if (addAtt.type == 'attachment') {
+                  fileIdsAdded.push(new Datastream(addAtt));
+                }
+              });
+            }
+            reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
+          });
+          if (_.isEmpty(reqs)) {
+            reqs.push(Observable.of({ "request": "dummy" }));
           }
-          // process additions
-          if (!_.isUndefined(newAttachments) && !_.isNull(newAttachments)) {
-            const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
-            _.each(toAdd, (addAtt) => {
-              if (addAtt.type == 'attachment') {
-                fileIdsAdded.push(new Datastream(addAtt));
-              }
-            });
-          }
-          reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
+          return Observable.of(reqs);
         });
-        if (_.isEmpty(reqs)) {
-          reqs.push(Observable.of({"request": "dummy"}));
-        }
-        return Observable.of(reqs);
-      });
     }
 
     public async removeDatastream(oid, datastream: Datastream) {
@@ -600,7 +600,7 @@ export module Services {
         const fileDoc = fileRes[0];
         sails.log.verbose(`${this.logHeader} removeDatastream() -> Deleting:`);
         sails.log.verbose(JSON.stringify(fileDoc));
-        this.gridFsBucket.delete(fileDoc['_id'], (err, res)=> {
+        this.gridFsBucket.delete(fileDoc['_id'], (err, res) => {
           if (err) {
             sails.log.error(`Error deleting: ${fileDoc['_id']}`);
             sails.log.error(JSON.stringify(err));
@@ -612,19 +612,39 @@ export module Services {
       }
     }
 
-    public async addDatastream(oid, datastream:Datastream) {
+    public async addDatastream(oid, datastream: Datastream) {
       const fileId = datastream.fileId;
       sails.log.verbose(`${this.logHeader} addDatastream() -> Meta: ${fileId}`);
       sails.log.verbose(JSON.stringify(datastream));
-      const metadata = _.merge(datastream.metadata, {redboxOid: oid});
+      const metadata = _.merge(datastream.metadata, { redboxOid: oid });
       const fpath = `${sails.config.record.attachments.stageDir}/${fileId}`;
       const fileName = `${oid}/${fileId}`;
       sails.log.verbose(`${this.logHeader} addDatastream() -> Adding: ${fileName}`);
-      await pipeline(
-        fs.createReadStream(fpath),
-        this.gridFsBucket.openUploadStream(fileName, {metadata: metadata})
-      );
+
+      await this.streamFileToBucket(fpath, fileName, metadata);
       sails.log.verbose(`${this.logHeader} addDatastream() -> Successfully added: ${fileName}`);
+    }
+
+    /** 
+     * 
+     * Stream file to bucket and return a promise when it's complete 
+     * 
+     * */
+    private streamFileToBucket(fpath: string, fileName: string, metadata: any) {
+      const uploadStream = this.gridFsBucket.openUploadStream(fileName, { metadata: metadata });
+      fs.createReadStream(fpath)
+        .pipe(uploadStream)
+
+      return new Promise((resolve, reject) => {
+        uploadStream.on('finish', () => {
+          resolve(uploadStream.gridFSFile);
+        });
+
+        uploadStream.on('error', (err) => {
+          reject(err);
+        });
+      });
+
     }
 
     public async addAndRemoveDatastreams(oid, addIds: any[], removeIds: any[]) {
@@ -637,14 +657,14 @@ export module Services {
     }
 
     public async getDatastream(oid, fileId): Promise<any> {
-      return this.getDatastreamAsync(oid,fileId);
+      return this.getDatastreamAsync(oid, fileId);
     }
 
     private async getDatastreamAsync(oid, fileId): Promise<any> {
       const fileName = `${oid}/${fileId}`;
       const fileRes = await this.getFileWithName(fileName).toArray();
       if (_.isArray(fileRes) && fileRes.length === 0) {
-        throw new Error (TranslationService.t('attachment-not-found'))
+        throw new Error(TranslationService.t('attachment-not-found'))
       }
       const response = new Attachment();
       response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName)
@@ -652,23 +672,23 @@ export module Services {
     }
 
     public async listDatastreams(oid, fileId) {
-      let query:any = {"metadata.redboxOid": oid};
+      let query: any = { "metadata.redboxOid": oid };
       if (!_.isEmpty(fileId)) {
         const fileName = `${oid}/${fileId}`;
-        query = {filename: fileName};
+        query = { filename: fileName };
       }
       sails.log.verbose(`${this.logHeader} listDatastreams() -> Listing attachments of oid: ${oid}`);
       sails.log.verbose(JSON.stringify(query));
       return this.gridFsBucket.find(query, {}).toArray();
     }
 
-    public async createRecordAudit(recordAudit:RecordAuditModel): Promise<any> {
+    public async createRecordAudit(recordAudit: RecordAuditModel): Promise<any> {
       let response = new StorageServiceResponse();
       try {
         sails.log.verbose(`${this.logHeader} Saving to DB...`);
-         await RecordAudit.create(recordAudit);
-         //TODO: fix type model to have the _id attribute
-         let savedRecordAudit:any = recordAudit;
+        await RecordAudit.create(recordAudit);
+        //TODO: fix type model to have the _id attribute
+        let savedRecordAudit: any = recordAudit;
         response.oid = savedRecordAudit._id;
         response.success = true;
         sails.log.verbose(`${this.logHeader} Record Audit created...`);
@@ -686,34 +706,34 @@ export module Services {
 
     public async getRecordAudit(params: RecordAuditParams): Promise<any> {
 
-            const oid = params['oid'];
-            const dateFrom = params['dateFrom'];
-            const dateTo = params['dateTo'];
+      const oid = params['oid'];
+      const dateFrom = params['dateFrom'];
+      const dateTo = params['dateTo'];
 
-            if (_.isEmpty(oid)) {
-              const msg = `${this.logHeader} getMeta() -> refusing to search using an empty OID`;
-              sails.log.error(msg);
-              throw new Error(msg);
-            }
+      if (_.isEmpty(oid)) {
+        const msg = `${this.logHeader} getMeta() -> refusing to search using an empty OID`;
+        sails.log.error(msg);
+        throw new Error(msg);
+      }
 
-            var criteria = { "redboxOid": oid };
+      var criteria = { "redboxOid": oid };
 
-            if(_.isDate(dateFrom)) {
-                criteria['createdAt'] = {['>='] : dateFrom };
-            }
+      if (_.isDate(dateFrom)) {
+        criteria['createdAt'] = { ['>=']: dateFrom };
+      }
 
-            if(_.isDate(dateTo)) {
-                if(_.isUndefined(criteria['createdAt'])) {
-                    criteria['createdAt'] = {};
-                }
-                criteria['createdAt']['<='] = dateTo;
-                sails.log.verbose(criteria);
-            }
+      if (_.isDate(dateTo)) {
+        if (_.isUndefined(criteria['createdAt'])) {
+          criteria['createdAt'] = {};
+        }
+        criteria['createdAt']['<='] = dateTo;
+        sails.log.verbose(criteria);
+      }
 
-          sails.log.verbose(`${this.logHeader} finding: `);
-          sails.log.verbose(JSON.stringify(criteria));
-          return RecordAudit.find(criteria);
-  }
+      sails.log.verbose(`${this.logHeader} finding: `);
+      sails.log.verbose(JSON.stringify(criteria));
+      return RecordAudit.find(criteria);
+    }
 
     /**
      * Returns a MongoDB cursor
@@ -722,8 +742,8 @@ export module Services {
      * @param  options
      * @return
      */
-    protected getFileWithName(fileName:string, options: any = {limit: 1}) {
-      return this.gridFsBucket.find({filename: fileName}, options);
+    protected getFileWithName(fileName: string, options: any = { limit: 1 }) {
+      return this.gridFsBucket.find({ filename: fileName }, options);
     }
 
     /**
@@ -733,7 +753,7 @@ export module Services {
      * @returns 
      */
     public async exists(oid: string): Promise<boolean> {
-      return await Record.count({redboxOid: oid}) > 0;
+      return await Record.count({ redboxOid: oid }) > 0;
     }
   }
 
