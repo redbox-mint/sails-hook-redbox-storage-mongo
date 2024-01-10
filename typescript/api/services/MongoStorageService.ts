@@ -144,6 +144,7 @@ export module Services {
         // Fixes: https://github.com/redbox-mint/redbox-portal/issues/800
         _.unset(record, 'dateCreated');
         _.unset(record, 'lastSaveDate');
+        _.unset(record, '_id');
         await Record.updateOne({ redboxOid: oid }).set(record);
         response.success = true;
       } catch (err) {
