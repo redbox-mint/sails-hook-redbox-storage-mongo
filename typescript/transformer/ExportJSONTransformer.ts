@@ -12,23 +12,27 @@ class ExportJSONTransformer extends Transform {
         super();
         this.push(`{ "recordType": "${recordtype}",\n "dateGenerated": "${moment().toISOString()}",\n`)
         if(!_.isEmpty(modifiedBefore) || !_.isEmpty(modifiedAfter)) {
-            this.push(`"dateModifiedRange": {\n`);
-            if(!_.isEmpty(modifiedAfter)) {
-                this.push(`"from": "${modifiedAfter}",\n`);
-            } else {
-                this.push(`"from": "",\n`);
-            }
-            if(!_.isEmpty(modifiedBefore)) {
-                this.push(`"to": "${modifiedBefore}",\n`);
-            } else {
-                this.push(`"to": "",\n`);
-            }
-            this.push(`},\n`);
+            this.push(`"dateModifiedRange": ${this.getDateModifiedRangeObject(modifiedBefore, modifiedAfter)},\n`);
         }
         this.push(`"records":[ `)
         
     }
 
+
+    private getDateModifiedRangeObject(modifiedBefore,modifiedAfter) {
+        let rangeObject = {};
+        if(!_.isEmpty(modifiedAfter)) {
+            rangeObject["from"] = modifiedAfter;
+        } else {
+            rangeObject["from"] = "";
+        }
+        if(!_.isEmpty(modifiedBefore)) {
+            rangeObject["to"] = modifiedBefore;
+        } else {
+            rangeObject["to"] = "";
+        }
+        return JSON.stringify(rangeObject)
+    }
 
     /**
      * Main function that send data to the parse to be processed.
