@@ -668,6 +668,10 @@ export module Services {
         throw new Error(TranslationService.t('attachment-not-found'))
       }
       const response = new Attachment();
+      let files = await this.listDatastreams(oid,fileId)[0];
+      if(files.length > 0 && files[0].length > 0) {
+        response.size = files[0].length;
+      }
       response.readstream = this.gridFsBucket.openDownloadStreamByName(fileName)
       return response;
     }
