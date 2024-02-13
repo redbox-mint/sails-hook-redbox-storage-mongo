@@ -20,7 +20,7 @@ const pipeline = util.promisify(stream.pipeline);
 
 declare var sails: Sails;
 declare var _;
-declare var Record: Model, RecordTypesService, TranslationService, FormsService, RecordAudit;
+declare var Record: Model, DeletedRecord: Model, RecordTypesService, TranslationService, FormsService, RecordAudit;
 
 export module Services {
   /**
@@ -285,23 +285,35 @@ export module Services {
     }
 
 
-    public async delete(oid) {
+    public async delete(oid, permanentlyDelete: boolean = false) {
       const response = new StorageServiceResponse();
+
       try {
-        await Record.destroyOne({ redboxOid: oid });
-        const datastreams = await this.listDatastreams(oid, null);
-        if (_.size(datastreams) > 0) {
-          _.each(datastreams, (file) => {
-            sails.log.verbose(`Deleting:`);
-            sails.log.verbose(JSON.stringify(file));
-            this.gridFsBucket.delete(file['_id'], (err, res) => {
-              if (err) {
-                sails.log.error(`Error deleting: ${file['_id']}`);
-                sails.log.error(JSON.stringify(err));
-              }
+        if (permanentlyDelete) {
+
+          const datastreams = await this.listDatastreams(oid, null);
+          if (_.size(datastreams) > 0) {
+            _.each(datastreams, (file) => {
+              sails.log.verbose(`Deleting:`);
+              sails.log.verbose(JSON.stringify(file));
+              this.gridFsBucket.delete(file['_id'], (err, res) => {
+                if (err) {
+                  sails.log.error(`Error deleting: ${file['_id']}`);
+                  sails.log.error(JSON.stringify(err));
+                }
+              });
             });
-          });
+          }
+
+        } else {
+          let record: any = await this.getMeta(oid);
+          let deletedRecord = {
+            redboxOid: record.redboxOid,
+            deletedRecordMetadata: record
+          }
+          await DeletedRecord.create(deletedRecord);
         }
+        await Record.destroyOne({ redboxOid: oid });
         response.success = true;
       } catch (err) {
         sails.log.error(`${this.logHeader} Failed to delete record: ${oid}`);
@@ -309,6 +321,7 @@ export module Services {
         response.success = false;
         response.message = err.message;
       }
+
       return response;
     }
 
