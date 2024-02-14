@@ -49,6 +49,7 @@ export module Services {
       'updateNotificationLog',
       'getRecords',
       'restoreRecord',
+      'destroyDeletedRecord',
       'getDeletedRecords',
       'exportAllPlans',
       'addDatastreams',
@@ -75,6 +76,7 @@ export module Services {
         sails.log.verbose(`${that.logHeader} Ready!`);
       });
     }
+    
     
 
     private getUuid(): string {
@@ -877,9 +879,30 @@ export module Services {
         response.message = err.message;
         return response;
       }
+    }
 
-      
+    async destroyDeletedRecord(oid: any): Promise<any> {
+      const response = new StorageServiceResponse();
+        
+      if (_.isEmpty(oid)) {
+        const msg = `${this.logHeader} destroyRecord() -> refusing to search using an empty OID`;
+        sails.log.error(msg);
+        throw new Error(msg);
+      }
 
+      try {
+        sails.log.verbose(`${this.logHeader} destroying deleted record ${oid} to DB...`);
+        await DeletedRecord.destroyOne({redboxOid:oid});
+        response.success = true;
+        sails.log.verbose(`${this.logHeader} deleted record destroyed...`);
+        return response;
+      } catch (err) {
+        sails.log.error(`${this.logHeader} Failed to create Record:`);
+        sails.log.error(JSON.stringify(err));
+        response.success = false;
+        response.message = err.message;
+        return response;
+      }
 
     }
 
