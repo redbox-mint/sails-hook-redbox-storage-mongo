@@ -36,6 +36,7 @@ export module Services {
     gridFsBucket: any;
     db: any;
     recordCol: any;
+    deletedRecordCol: any;
 
     protected _exportedMethods: any = [
       'create',
@@ -47,6 +48,8 @@ export module Services {
       'delete',
       'updateNotificationLog',
       'getRecords',
+      'restoreRecord',
+      'getDeletedRecords',
       'exportAllPlans',
       'addDatastreams',
       'updateDatastream',
@@ -59,6 +62,7 @@ export module Services {
       'getRecordAudit',
       'exists'
     ];
+    
 
     constructor() {
       super();
@@ -71,6 +75,7 @@ export module Services {
         sails.log.verbose(`${that.logHeader} Ready!`);
       });
     }
+    
 
     private getUuid(): string {
       return uuidv1().replace(/-/g, '');
@@ -92,6 +97,7 @@ export module Services {
       }
       this.gridFsBucket = new mongodb.GridFSBucket(this.db);
       this.recordCol = await this.db.collection(Record.tableName);
+      this.deletedRecordCol = await this.db.collection(DeletedRecord.tableName);
       await this.createIndices(this.db);
     }
 
@@ -364,6 +370,96 @@ export module Services {
       return record;
     }
 
+    public async getDeletedRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined, filterMode:string = 'regex') {
+
+
+      // BrandId ...
+      let query = {
+        "deletedRecordMetadata.metaMetadata.brandId": brand.id
+      };
+      // Paginate ...
+      const options = {
+        limit: _.toNumber(rows),
+        skip: _.toNumber(start)
+      }
+      // Sort ...defaults to lastSaveDate
+      if (_.isEmpty(sort)) {
+        sort = '{"lastSaveDate": -1}';
+      }
+      sails.log.verbose(`Sort is: ${sort}`);
+      if (_.indexOf(`${sort}`, '1') == -1) {
+        // if only the field is specified, default to descending...
+        sort = `{"${sort}":-1}`;
+      } else {
+        try {
+          options['sort'] = JSON.parse(sort);
+        } catch (error) {
+          // trying to massage this to valid JSON
+          options['sort'] = {};
+          options['sort'][`${sort.substring(0, sort.indexOf(':'))}`] = _.toNumber(sort.substring(sort.indexOf(':') + 1));
+        }
+      }
+      // Authorization ...
+      let roleNames = this.getRoleNames(roles, brand);
+      let andArray = [];
+      let permissions = {
+        "$or": [{ "deletedRecordMetadata.authorization.view": username },
+        { "deletedRecordMetadata.authorization.edit": username },
+        { "deletedRecordMetadata.authorization.editRoles": { "$in": roleNames } },
+        { "deletedRecordMetadata.authorization.viewRoles": { "$in": roleNames } }]
+      };
+      andArray.push(permissions);
+      // Metadata type...
+      if (!_.isUndefined(recordType) && !_.isEmpty(recordType)) {
+        let typeArray = [];
+        _.each(recordType, rType => {
+          typeArray.push({ "deletedRecordMetadata.metaMetadata.type": rType });
+        });
+        let types = { "$or": typeArray };
+        andArray.push(types);
+      }
+      // Package type...
+      if (!_.isUndefined(packageType) && !_.isEmpty(packageType)) {
+        let typeArray = [];
+        _.each(packageType, rType => {
+          typeArray.push({ "deletedRecordMetadata.metaMetadata.packageType": rType });
+        });
+        let types = { "$or": typeArray };
+        andArray.push(types);
+      }
+      // Workflow ...
+      if (workflowState != undefined) {
+        query["deletedRecordMetadata.workflow.stage"] = workflowState;
+      }
+      if (!_.isEmpty(filterString) && !_.isEmpty(filterFields)) {
+        let escapedFilterString = this.escapeRegExp(filterString);
+        sails.log.verbose('escapedFilterString ' + escapedFilterString);
+        for (let filterField of filterFields) {
+          let filterQuery = {};
+          if (filterMode == 'equal') {
+            filterQuery[filterField] = filterString;
+          } else if (filterMode == 'regex') {
+            filterQuery[filterField] = new RegExp(`.*${escapedFilterString}.*`);
+            //regex expressions are printed as empty objects {} when using JSON.stringify
+            //hence intentionally not using JSON.stringify in below logging print out 
+            sails.log.verbose(filterQuery);
+          }
+          andArray.push(filterQuery);
+        }
+      }
+
+      query['$and'] = andArray;
+
+      sails.log.verbose(`Query: ${JSON.stringify(query)}`);
+      sails.log.verbose(`Options: ${JSON.stringify(options)}`);
+      const { items, totalItems } = await this.runDeletedRecordQuery(Record.tableName, query, options);
+      const response = new StorageServiceResponse();
+      response.success = true;
+      response.items = items;
+      response.totalItems = totalItems;
+      return response;
+    }
+
     public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined, filterMode = undefined) {
 
       //Default to regex when filterMode is not set to maintain pre existing functionality
@@ -463,6 +559,10 @@ export module Services {
 
     protected async runRecordQuery(colName, query, options) {
       return { items: await this.recordCol.find(query, options).toArray(), totalItems: await this.recordCol.count(query) };
+    }
+
+    protected async runDeletedRecordQuery(colName, query, options) {
+      return { items: await this.deletedRecordCol.find(query, options).toArray(), totalItems: await this.deletedRecordCol.count(query) };
     }
 
     private async * fetchAllRecords(query, options, stringifyJSON: boolean = false) {
@@ -720,9 +820,9 @@ export module Services {
 
     public async getRecordAudit(params: RecordAuditParams): Promise<any> {
 
-      const oid = params['oid'];
-      const dateFrom = params['dateFrom'];
-      const dateTo = params['dateTo'];
+      const oid = params.oid;
+      const dateFrom = params.dateFrom;
+      const dateTo = params.dateTo;
 
       if (_.isEmpty(oid)) {
         const msg = `${this.logHeader} getMeta() -> refusing to search using an empty OID`;
@@ -748,6 +848,41 @@ export module Services {
       sails.log.verbose(JSON.stringify(criteria));
       return RecordAudit.find(criteria);
     }
+
+    async restoreRecord(oid: any): Promise<any> {
+      const response = new StorageServiceResponse();
+        
+      if (_.isEmpty(oid)) {
+        const msg = `${this.logHeader} restoreRecord() -> refusing to search using an empty OID`;
+        sails.log.error(msg);
+        throw new Error(msg);
+      }
+
+      try {
+        sails.log.verbose(`${this.logHeader} Restoring record ${oid} to DB...`);
+        let deletedRecord = await DeletedRecord.findOne({redboxOid: oid});
+        delete deletedRecord.deletedRecordMetadata._id;
+
+        let record = await Record.create(deletedRecord.deletedRecordMetadata);
+        response.metadata = record; 
+
+        await DeletedRecord.destroyOne({redboxOid:oid});
+        response.success = true;
+        sails.log.verbose(`${this.logHeader} Record restored...`);
+        return response;
+      } catch (err) {
+        sails.log.error(`${this.logHeader} Failed to create Record:`);
+        sails.log.error(JSON.stringify(err));
+        response.success = false;
+        response.message = err.message;
+        return response;
+      }
+
+      
+
+
+    }
+
 
     /**
      * Returns a MongoDB cursor
