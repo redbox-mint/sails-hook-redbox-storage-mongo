@@ -9,6 +9,9 @@ module.exports = {
       dateCreated: {
           type: 'string',
           autoCreatedAt: true
+      },
+      action: {
+        type: 'string'
       }
   },
   datastore: 'redboxStorage'
