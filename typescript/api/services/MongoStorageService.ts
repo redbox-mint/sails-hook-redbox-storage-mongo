@@ -616,10 +616,9 @@ export module Services {
         });
       }
       if (!_.isEmpty(modBefore)) {
-        let modBeforeString = moment(modBefore, 'YYYY-MM-DD').add(1, 'days').format('YYYY-MM-DD')
         andArray.push({
           lastSaveDate: {
-            '$lte': `${modBeforeString}`
+            '$lte': `${modBefore}`
           }
         });
       }
