@@ -462,7 +462,7 @@ export module Services {
       return response;
     }
 
-    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined, filterMode = undefined) {
+    public async getRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined, filterMode = undefined, secondarySort = undefined) {
 
       //Default to regex when filterMode is not set to maintain pre existing functionality
       if (_.isUndefined(filterMode) || _.isNull(filterMode) || _.isEmpty(filterMode)) {
@@ -494,6 +494,11 @@ export module Services {
           options['sort'][`${sort.substring(0, sort.indexOf(':'))}`] = _.toNumber(sort.substring(sort.indexOf(':') + 1));
         }
       }
+
+      if(!_.isEmpty(secondarySort)) {
+        options['sort'][`${secondarySort.substring(0, secondarySort.indexOf(':'))}`] = _.toNumber(secondarySort.substring(secondarySort.indexOf(':') + 1));
+      }
+
       // Authorization ...
       let roleNames = this.getRoleNames(roles, brand);
       let andArray = [];
@@ -505,45 +510,63 @@ export module Services {
       };
       andArray.push(permissions);
       // Metadata type...
-      if (!_.isUndefined(recordType) && !_.isEmpty(recordType)) {
-        let typeArray = [];
-        _.each(recordType, rType => {
-          typeArray.push({ "metaMetadata.type": rType });
-        });
-        let types = { "$or": typeArray };
-        andArray.push(types);
+      if (_.isArray(recordType)) {
+        if(recordType.length > 1) {
+          let typeArray = [];
+          _.each(recordType, rType => {
+            typeArray.push({ "metaMetadata.type": rType });
+          });
+          let types = { "$or": typeArray };
+          query["metaMetadata.type"] = types;
+        } else {
+          let recType = recordType[0];
+          if(!_.isUndefined(recType) && !_.isEmpty(recType)) {
+            query["metaMetadata.type"] = recType;
+          }
+        }
+      } else if(recordType != undefined && recordType != '') {
+        query["metaMetadata.type"] = recordType;
       }
       // Package type...
-      if (!_.isUndefined(packageType) && !_.isEmpty(packageType)) {
-        let typeArray = [];
-        _.each(packageType, rType => {
-          typeArray.push({ "metaMetadata.packageType": rType });
-        });
-        let types = { "$or": typeArray };
-        andArray.push(types);
+      if (_.isArray(packageType)) {
+        if(packageType.length > 1) {
+          let typeArray = [];
+          _.each(packageType, rType => {
+            typeArray.push({ "metaMetadata.packageType": rType });
+          });
+          let types = { "$or": typeArray };
+          query["metaMetadata.packageType"] = types;
+        } else {
+          let packType = packageType[0];
+          if(!_.isUndefined(packType) && !_.isEmpty(packType)) {
+            query["metaMetadata.packageType"] = packType;
+          }
+        }
+      } else if(packageType != undefined && packageType != '') {
+        query["metaMetadata.packageType"] = packageType;
       }
       // Workflow ...
-      if (workflowState != undefined) {
+      if (workflowState != undefined && workflowState != '') {
         query["workflow.stage"] = workflowState;
       }
+      //Additional filter conditions
       if (!_.isEmpty(filterString) && !_.isEmpty(filterFields)) {
         let escapedFilterString = this.escapeRegExp(filterString);
         sails.log.verbose('escapedFilterString ' + escapedFilterString);
         for (let filterField of filterFields) {
-          let filterQuery = {};
           if (filterMode == 'equal') {
-            filterQuery[filterField] = filterString;
+            query[filterField] = filterString;
           } else if (filterMode == 'regex') {
-            filterQuery[filterField] = new RegExp(`.*${escapedFilterString}.*`);
-            //regex expressions are printed as empty objects {} when using JSON.stringify
-            //hence intentionally not using JSON.stringify in below logging print out 
-            sails.log.verbose(filterQuery);
+            query[filterField] = new RegExp(`.*${escapedFilterString}.*`);
           }
-          andArray.push(filterQuery);
         }
       }
 
       query['$and'] = andArray;
+
+      //regex expressions are printed as empty objects {} when using JSON.stringify
+      //hence intentionally not using JSON.stringify in below logging print out
+      sails.log.verbose(query);
 
       sails.log.verbose(`Query: ${JSON.stringify(query)}`);
       sails.log.verbose(`Options: ${JSON.stringify(options)}`);
