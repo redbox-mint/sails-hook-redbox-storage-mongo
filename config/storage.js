@@ -37,6 +37,36 @@ module.exports.storage = {
         key: {
           'metaMetadata.type': 1
         }
+      },
+      {
+        key: {
+          'metaMetadata.createdOn': 1
+        }
+      },
+      {
+        key: {
+          'metaMetadata.createdOn': -1
+        }
+      },
+      {
+        key: {
+          'metaMetadata.lastSaveDate': 1
+        }
+      },
+      {
+        key: {
+          'metaMetadata.lastSaveDate': -1
+        }
+      },
+      {
+        key: {
+          'redboxOid': 1
+        }
+      },
+      {
+        key: {
+          'redboxOid': -1
+        }
       }
     ]
   }
