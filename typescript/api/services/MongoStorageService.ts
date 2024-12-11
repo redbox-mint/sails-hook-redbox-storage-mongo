@@ -516,8 +516,10 @@ export module Services {
           _.each(recordType, rType => {
             typeArray.push({ "metaMetadata.type": rType });
           });
-          let types = { "$or": typeArray };
-          query["metaMetadata.type"] = types;
+          // Fixed incorrect "$or" condition construction: it should be top level, not nested within a field name.
+          // let types = { "$or": typeArray };
+          // query["metaMetadata.type"] = types;
+          query["$or"] = typeArray;
         } else {
           let recType = recordType[0];
           if(!_.isUndefined(recType) && !_.isEmpty(recType)) {
