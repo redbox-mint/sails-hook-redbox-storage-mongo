@@ -559,7 +559,8 @@ export module Services {
           if (filterMode == 'equal') {
             query[filterField] = filterString;
           } else if (filterMode == 'regex') {
-            query[filterField] = new RegExp(`.*${escapedFilterString}.*`);
+            // Improved to enable case insensitive search by default and allow for partial matches
+            query[filterField] = new RegExp(`.*${escapedFilterString}.*`, 'i');
           }
         }
       }
