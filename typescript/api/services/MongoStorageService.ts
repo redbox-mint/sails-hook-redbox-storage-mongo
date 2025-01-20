@@ -516,8 +516,10 @@ export module Services {
           _.each(recordType, rType => {
             typeArray.push({ "metaMetadata.type": rType });
           });
-          let types = { "$or": typeArray };
-          query["metaMetadata.type"] = types;
+          // Fixed incorrect "$or" condition construction: it should be top level, not nested within a field name.
+          // let types = { "$or": typeArray };
+          // query["metaMetadata.type"] = types;
+          query["$or"] = typeArray;
         } else {
           let recType = recordType[0];
           if(!_.isUndefined(recType) && !_.isEmpty(recType)) {
@@ -557,7 +559,8 @@ export module Services {
           if (filterMode == 'equal') {
             query[filterField] = filterString;
           } else if (filterMode == 'regex') {
-            query[filterField] = new RegExp(`.*${escapedFilterString}.*`);
+            // Improved to enable case insensitive search by default and allow for partial matches
+            query[filterField] = new RegExp(`.*${escapedFilterString}.*`, 'i');
           }
         }
       }
