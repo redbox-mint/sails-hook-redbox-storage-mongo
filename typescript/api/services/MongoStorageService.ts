@@ -153,6 +153,12 @@ export module Services {
         _.unset(record, 'dateCreated');
         _.unset(record, 'lastSaveDate');
         _.unset(record, '_id');
+
+        // Records with an 'id' property fail to save with error:
+        // {"cause":{"name":"AdapterError","adapterMethodName":"update","modelIdentity":"record","raw":{"code":"E_CANNOT_INTERPRET_AS_OBJECTID"}},"isOperational":true}
+        // Fix by ensuring the 'id' property is removed.
+        _.unset(record, 'id');
+
         await Record.updateOne({ redboxOid: oid }).set(record);
         response.success = true;
       } catch (err) {
