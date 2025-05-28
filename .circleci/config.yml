@@ -25,10 +25,12 @@ jobs:
           # TODO: chmod 777 isn't great, but the permission errors were getting too complicated
           name: Change project dir ownership to work in docker container
           command: |
+            mkdir -p support/junit
             sudo chmod -R 'u=rwx,g=rwx,o=rwx' /home/circleci/project
       - run:
           name: Run tests
           command: |
+            mkdir -p support/junit
             npm run test:clean
             npm test
       - store_test_results:
