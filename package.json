@@ -11,9 +11,16 @@
     "url": "https://github.com/redbox-mint/sails-hook-redbox-storage-mongo.git"
   },
   "scripts": {
-    "test": "NODE_ENV=test; mocha",
-    "installHook": "docker run -v $(pwd):/opt/sailshook qcifengineering/redbox-portal /bin/bash -c 'cd /opt/redbox-portal;yarn add  \"file:/opt/sailshook\"'; docker commit $(docker ps -lq) redboxportalwithhook",
-    "runDev": "docker-compose -f support/development/docker-compose.yml up"
+    "compile": "./node_modules/typescript/bin/tsc -p tsconfig.json",
+    "dev:run": "docker compose -f ./support/docker-compose.yml -f ./support/docker-compose.dev.yml up --menu=false --remove-orphans --abort-on-container-exit --exit-code-from rbportal",
+    "predev:run": "npm install --ignore-scripts && npm run compile",
+    "dev:clean": "docker compose -f ./support/docker-compose.yml -f ./support/docker-compose.dev.yml down",
+    "dev:logs": "docker compose -f ./support/docker-compose.yml -f ./support/docker-compose.dev.yml logs",
+    "dev:removedata": "docker compose -f ./support/docker-compose.yml -f ./support/docker-compose.dev.yml down -v",
+    "test": "docker compose -f ./support/docker-compose.yml -f ./support/docker-compose.mocha.yml up --menu=false --abort-on-container-exit --exit-code-from rbportal",
+    "pretest": "npm install --ignore-scripts && npm run compile",
+    "posttest": "npm run test:clean",
+    "test:clean": "docker compose -f ./support/docker-compose.yml -f ./support/docker-compose.mocha.yml down -v"
   },
   "keywords": [
     "sails",
@@ -26,21 +33,23 @@
   "author": "QCIF Engineering dev@redboxresearchdata.com.au",
   "license": "GPL-3.0",
   "devDependencies": {
-    "@researchdatabox/redbox-core-types": "^1.4.3",
-    "@types/chai": "^4.2.12",
-    "@types/lodash": "^4.14.159",
-    "@types/mocha": "^8.0.3",
-    "chai": "^4.2.0",
+    "@researchdatabox/redbox-core-types": "1.4.8",
+    "@types/chai": "5.2.2",
+    "@types/lodash": "4.17.17",
+    "@types/node": "20.17.51",
+    "@types/mocha": "10.0.10",
+    "chai": "5.2.0",
     "fs": "0.0.1-security",
-    "mocha": "^8.1.1",
-    "moment": "^2.29.1",
-    "mongodb": "^6.2.0",
-    "rxjs": "^6.6.2",
-    "rxjs-compat": "^6.6.7",
-    "sails": "^1.2.5",
-    "stream": "0.0.2",
-    "typescript": "^5.2.2",
-    "util": "^0.12.4"
+    "mocha": "11.5.0",
+    "mocha-junit-reporter": "2.2.1",
+    "moment": "2.30.1",
+    "mongodb": "6.16.0",
+    "rxjs": "6.6.7",
+    "rxjs-compat": "6.6.7",
+    "sails": "1.5.14",
+    "stream": "0.0.3",
+    "typescript": "5.5.4",
+    "util": "0.12.5"
   },
   "dependencies": {
     "json2csv": "^5.0.3",
