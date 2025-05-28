@@ -162,8 +162,14 @@ export module Services {
         await Record.updateOne({ redboxOid: oid }).set(record);
         response.success = true;
       } catch (err) {
-        sails.log.error(`${this.logHeader} Failed to save update to MongoDB:`);
-        sails.log.error(JSON.stringify(err));
+        sails.log.error(`${this.logHeader} Failed to save update to MongoDB: ${JSON.stringify({
+          error: err,
+          response: response,
+          brand: brand,
+          oid: oid,
+          record: record,
+          user: user,
+        })}`);
         response.success = false;
         response.message = err;
       }
@@ -208,33 +214,55 @@ export module Services {
       return response;
     }
 
+    /**
+     * If pendingValue is in editPending or viewPending, remove all instances from the pending arrays and
+     * put the userid in the matching access / non-pending array, then save the changes to the storage.
+     *
+     * Implementation Note: This is a sync method, but it calls async methods.
+     * This means that the storage will not be updated when this method returns, but at some point later.
+     *
+     * @param oid The record identifier.
+     * @param userid The value to put in the matching access / non-pending arrays.
+     * @param pendingValue The value to find in the pending arrays.
+     */
     public provideUserAccessAndRemovePendingAccess(oid, userid, pendingValue): void {
       const batchFn = async () => {
         const metadata = await this.getMeta(oid);
-        // remove pending edit access and add real edit access with userid
-        var pendingEditArray = metadata['authorization']['editPending'];
-        var editArray = metadata['authorization']['edit'];
-        for (var i = 0; i < pendingEditArray.length; i++) {
-          if (pendingEditArray[i] == pendingValue) {
-            pendingEditArray = pendingEditArray.filter(e => e !== pendingValue);
-            editArray = editArray.filter(e => e !== userid);
-            editArray.push(userid);
-          }
-        }
-        metadata['authorization']['editPending'] = pendingEditArray;
-        metadata['authorization']['edit'] = editArray;
 
-        var pendingViewArray = metadata['authorization']['viewPending'];
-        var viewArray = metadata['authorization']['view'];
-        for (var i = 0; i < pendingViewArray.length; i++) {
-          if (pendingViewArray[i] == pendingValue) {
-            pendingViewArray = pendingViewArray.filter(e => e !== pendingValue);
-            viewArray = viewArray.filter(e => e !== userid);
-            viewArray.push(userid);
-          }
+        // Update edit authorization - remove pending edit access and add real edit access with userid
+        const pendingEditArray: string[] = _.get(metadata, 'authorization.editPending', []);
+        const editArray: string[] = _.get(metadata, 'authorization.edit', []);
+
+        // remove all items matching pendingValue from the pendingEditArray
+        const pendingEditArrayFiltered = pendingEditArray.filter(value => value !== pendingValue);
+        const pendingEditFound = pendingEditArray.length > pendingEditArrayFiltered.length;
+
+        // add the item to the editArray if it existed in the pendingEditArray, and it is not in the editArray
+        if (pendingEditFound && !editArray.includes(userid)) {
+          editArray.push(userid);
         }
-        metadata['authorization']['viewPending'] = pendingViewArray;
-        metadata['authorization']['view'] = viewArray;
+
+        // update the metadata with the modified arrays
+        _.set(metadata, 'authorization.editPending', pendingEditArrayFiltered);
+        _.set(metadata, 'authorization.edit', editArray);
+
+        // Update view authorization - remove pending view access and add real view access with userid
+        const pendingViewArray: string[] = _.get(metadata, 'authorization.viewPending', []);
+        const viewArray: string[] = _.get(metadata, 'authorization.view', []);
+
+        // remove all items matching pendingValue from the pendingViewArray
+        const pendingViewArrayFiltered = pendingViewArray.filter(value => value !== pendingValue);
+        const pendingViewFound = pendingViewArray.length > pendingViewArrayFiltered.length;
+
+        // add the item to the viewArray if it existed in the pendingViewArray, and it is not in the viewArray
+        if (pendingViewFound && !viewArray.includes(userid)) {
+          viewArray.push(userid);
+        }
+
+        // update the metadata with the modified arrays
+        _.set(metadata, 'authorization.viewPending', pendingViewArrayFiltered);
+        _.set(metadata, 'authorization.view', viewArray);
+
         try {
           await this.updateMeta(null, oid, metadata);
         } catch (err) {
@@ -242,6 +270,8 @@ export module Services {
           sails.log.error(JSON.stringify(err));
         }
       };
+
+      // TODO: Fix this so that the method only returns after the storage is updated.
       batchFn();
     }
 
