@@ -1,67 +1,82 @@
 version: 2.1
+
 jobs:
-  build_and_publish:
-    docker:
-      - image: cimg/node:20.9.0
-    working_directory: ~/repo
+  build-test:
+    machine:
+      image: ubuntu-2004:current
+    resource_class: medium
+    environment:
+      BUILDKIT_PROGRESS: 'plain'
     steps:
       - checkout
-      - run: npm install && node_modules/.bin/tsc
-      # run tests!
-      # - run: npm test
-      # # store test results
-      # - store_test_results:
-      #     path: test_results
+      - restore_cache:
+          keys:
+            - v1-node-{{ .Branch }}-{{ checksum "package-lock.json" }}
+            - v1-node-{{ .Branch }}
+            - v1-node
+      - run:
+          name: Install packages
+          command: npm ci --strict-peer-deps --ignore-scripts
+      - save_cache:
+          key: v1-node-{{ .Branch }}-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/.npm
+      - run:
+          # TODO: chmod 777 isn't great, but the permission errors were getting too complicated
+          name: Change project dir ownership to work in docker container
+          command: |
+            mkdir -p support/junit
+            sudo chmod -R 'u=rwx,g=rwx,o=rwx' /home/circleci/project
+      - run:
+          name: Run tests
+          command: |
+            mkdir -p support/junit
+            npm run test:clean
+            npm test
+      - store_test_results:
+          path: support/junit
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
 
-      # store code coverage
-      # - persist_to_workspace:
-      #     root: ~/repo
-      #     paths: .
+  publish:
+    machine:
+      image: ubuntu-2004:current
+    resource_class: medium
+    steps:
+      - attach_workspace:
+          at: /home/circleci/project
       - run:
           name: Authenticate with NPM
-          command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/repo/.npmrc
+          command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc
       - run:
           name: Publish package
           command: npm publish --access public
 
 workflows:
-  publish:
+  branch-build-test:
     jobs:
-      - build_and_publish:
+      - build-test:
           filters:
-            tags:
-              only: /^v.*/
             branches:
+              only: /.*/
+            tags:
               ignore: /.*/
 
-# jobs:
-#   build:
-#     docker:
-#       - image: "cimg/base:stable"
-#       - checkout
-#       - node/install:
-#           node-version: 12.16.0
-#       - run: npm install --production
-#       - run: node_modules/.bin/tsc
-#       - persist_to_workspace:
-#           root: .
-#           paths:
-#             - .
-#   test:
-#     machine: true
-#     steps:
-#       - docker/install-docker-compose
-#       - attach_workspace:
-#            at: /home/circleci/project
-#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm install 12.16.0 && nvm use 12.16.0
-#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm use 12.16.0 && node_modules/.bin/tsc -p tsconfig-codecov.json
-#       - run: (cd support/integration-testing && docker-compose -f docker-compose.newman.yml up --abort-on-container-exit --exit-code-from redboxportal && docker-compose -f docker-compose.mocha.yml up --abort-on-container-exit --exit-code-from redboxportal)
-#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm use 12.16.0 && npm i -g codecov && codecov -t $CODECOV_TOKEN
-#       - run: export NVM_DIR=/opt/circleci/.nvm && source /opt/circleci/.nvm/nvm.sh && nvm use 12.16.0 && node_modules/.bin/tsc
-#
-# orbs:
-#   node: circleci/node@4.0.0
-#   docker: circleci/docker@1.4.0
-# version: 2.1
-# workflows:
-#
+  tag-build-test-publish:
+    jobs:
+      - build-test:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+      - publish:
+          requires:
+            - build-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
