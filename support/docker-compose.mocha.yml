@@ -9,6 +9,7 @@ services:
     environment:
       - sails_redbox__mochaTesting=true
       - 'CI=${CI:-false}'
+      - 'DEBUG=mocha-junit-reporter'
     entrypoint:
       - '/opt/redbox-portal/node_modules/@researchdatabox/sails-hook-redbox-storage-mongo/support/run-mocha.sh'
 

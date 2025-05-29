@@ -13,7 +13,7 @@ npm install --ignore-scripts
 
 exec node \
   /opt/redbox-portal/node_modules/.bin/mocha \
-  --exit \
+  --exit --no-package \
   --config ${BASE_PATH}/test/unit/.mocharc.js \
   ${BASE_PATH}/test/unit/bootstrap.js \
   ${BASE_PATH}/test/unit/**/*.test.js
