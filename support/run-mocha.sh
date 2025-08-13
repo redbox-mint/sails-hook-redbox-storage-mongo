@@ -14,11 +14,15 @@ mkdir -p /tmp/redbox-portal
 cp -Rf node_modules /tmp/redbox-portal/
 cp package.json /tmp/redbox-portal/
 cp package-lock.json /tmp/redbox-portal/
-cd /tmp/redbox-portal && npm install --ignore-scripts
+cd /tmp/redbox-portal
+npm install --ignore-scripts
 rm -Rf /tmp/redbox-portal/node_modules/@researchdatabox/sails-hook-redbox-storage-mongo
 cp -Rf /tmp/redbox-portal/* /opt/redbox-portal/
+cd /opt/redbox-portal
 
-exec node /opt/redbox-portal/node_modules/.bin/mocha \
+
+exec node \
+  /opt/redbox-portal/node_modules/.bin/mocha \
   --exit --no-package \
   --config ${BASE_PATH}/test/unit/.mocharc.js \
   ${BASE_PATH}/test/unit/bootstrap.js \
