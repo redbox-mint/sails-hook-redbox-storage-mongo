@@ -9,7 +9,8 @@ cd "${BASE_PATH}"
 npm install --ignore-scripts
 
 cd /opt/redbox-portal
-npm install --ignore-scripts
+# This is breaking CI but we also shouldn't need to run the install again on a built base image so commenting it out
+# npm install --ignore-scripts
 
 exec node \
   /opt/redbox-portal/node_modules/.bin/mocha \
