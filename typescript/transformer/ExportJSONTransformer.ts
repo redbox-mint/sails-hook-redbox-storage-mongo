@@ -1,16 +1,16 @@
 'use strict';
 
-const {
-    Transform
-} = require('stream');
-import moment = require('moment');
+const { Transform } = require('stream');
+import { DateTime } from 'luxon';
+declare var require: any;
+declare var module: any;
 declare let sails, _;
 
 class ExportJSONTransformer extends Transform {
     first:boolean = true;
     constructor(recordtype:string, modifiedBefore:string, modifiedAfter:string) {
         super();
-        this.push(`{ "recordType": "${recordtype}",\n "dateGenerated": "${moment().toISOString()}",\n`)
+    this.push(`{ "recordType": "${recordtype}",\n "dateGenerated": "${DateTime.now().toISO()}",\n`)
         if(!_.isEmpty(modifiedBefore) || !_.isEmpty(modifiedAfter)) {
             this.push(`"dateModifiedRange": ${this.getDateModifiedRangeObject(modifiedBefore, modifiedAfter)},\n`);
         }

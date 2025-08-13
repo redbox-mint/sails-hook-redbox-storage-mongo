@@ -4,7 +4,7 @@ import {
 
 import { Sails, Model } from "sails";
 import { v1 as uuidv1 } from 'uuid';
-import moment = require('moment');
+import { DateTime } from 'luxon';
 
 import mongodb = require('mongodb');
 import util = require('util');
@@ -375,7 +375,8 @@ export module Services {
         const logName = _.get(options, 'logName', null);
         if (logName) {
           let log = _.get(record, logName, null);
-          const entry = { date: moment().format('YYYY-MM-DDTHH:mm:ss') };
+          // Use Luxon for ISO-like local timestamp without timezone offset
+          const entry = { date: DateTime.now().toFormat("yyyy-LL-dd'T'HH:mm:ss") };
           if (log) {
             log.push(entry);
           } else {
