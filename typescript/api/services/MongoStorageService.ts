@@ -408,7 +408,7 @@ export module Services {
       return record;
     }
 
-    public async getDeletedRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined, filterMode:string = 'regex') {
+    public async getDeletedRecords(workflowState, recordType = undefined, start, rows = 10, username, roles, brand, editAccessOnly = undefined, packageType = undefined, sort = undefined, filterFields = undefined, filterString = undefined, filterMode:string = 'regex', secondarySort = undefined) {
 
 
       // BrandId ...
@@ -437,6 +437,11 @@ export module Services {
           options['sort'][`${sort.substring(0, sort.indexOf(':'))}`] = _.toNumber(sort.substring(sort.indexOf(':') + 1));
         }
       }
+
+      if(!_.isEmpty(secondarySort)) {
+        options['sort'][`${secondarySort.substring(0, secondarySort.indexOf(':'))}`] = _.toNumber(secondarySort.substring(secondarySort.indexOf(':') + 1));
+      }
+
       // Authorization ...
       let roleNames = this.getRoleNames(roles, brand);
       let andArray = [];
