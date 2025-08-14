@@ -52,7 +52,7 @@
   "dependencies": {
     "json2csv": "^5.0.3",
     "lodash": "^4.17.21",
-    "uuid": "8.3.0"
+    "uuid": "11.1.0"
   },
   "peerDependencies": {
     "luxon": ">=3.0.0",
