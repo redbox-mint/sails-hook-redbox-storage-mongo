@@ -46,7 +46,7 @@
     "mongodb": "6.16.0",
     "sails": "1.5.14",
     "stream": "0.0.3",
-    "typescript": "5.5.4",
+    "typescript": "5.9.2",
     "util": "0.12.5"
   },
   "dependencies": {
