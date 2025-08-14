@@ -1,4 +1,5 @@
 import { Observable, of } from 'rxjs';
+import { mergeMap } from 'rxjs';
 
 import { Sails, Model } from "sails";
 import { v1 as uuidv1 } from 'uuid';
@@ -734,38 +735,41 @@ export module Services {
     public updateDatastream(oid: string, record, newMetadata, fileRoot, fileIdsAdded): any {
       // loop thru the attachment fields and determine if we need to add or remove
       return FormsService.getFormByName(record.metaMetadata.form, true)
-        .flatMap(form => {
-          const reqs = [];
-          record.metaMetadata.attachmentFields = form.attachmentFields;
-          _.each(form.attachmentFields, async (attField) => {
-            const oldAttachments = record.metadata[attField];
-            const newAttachments = newMetadata[attField];
-            const removeIds = [];
-            // process removals
-            if (!_.isUndefined(oldAttachments) && !_.isNull(oldAttachments) && !_.isNull(newAttachments)) {
-              const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
-              _.each(toRemove, (removeAtt) => {
-                if (removeAtt.type == 'attachment') {
-                  removeIds.push(new Datastream(removeAtt));
-                }
-              });
+        .pipe(
+          mergeMap(form => {
+            const typedForm = form as { attachmentFields: string[] };
+            const reqs = [];
+            record.metaMetadata.attachmentFields = typedForm.attachmentFields;
+            _.each(typedForm.attachmentFields, async (attField) => {
+              const oldAttachments = record.metadata[attField];
+              const newAttachments = newMetadata[attField];
+              const removeIds = [];
+              // process removals
+              if (!_.isUndefined(oldAttachments) && !_.isNull(oldAttachments) && !_.isNull(newAttachments)) {
+                const toRemove = _.differenceBy(oldAttachments, newAttachments, 'fileId');
+                _.each(toRemove, (removeAtt) => {
+                  if (removeAtt.type == 'attachment') {
+                    removeIds.push(new Datastream(removeAtt));
+                  }
+                });
+              }
+              // process additions
+              if (!_.isUndefined(newAttachments) && !_.isNull(newAttachments)) {
+                const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
+                _.each(toAdd, (addAtt) => {
+                  if (addAtt.type == 'attachment') {
+                    fileIdsAdded.push(new Datastream(addAtt));
+                  }
+                });
+              }
+              reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
+            });
+            if (_.isEmpty(reqs)) {
+              reqs.push(of({ "request": "dummy" }));
             }
-            // process additions
-            if (!_.isUndefined(newAttachments) && !_.isNull(newAttachments)) {
-              const toAdd = _.differenceBy(newAttachments, oldAttachments, 'fileId');
-              _.each(toAdd, (addAtt) => {
-                if (addAtt.type == 'attachment') {
-                  fileIdsAdded.push(new Datastream(addAtt));
-                }
-              });
-            }
-            reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
-          });
-          if (_.isEmpty(reqs)) {
-            reqs.push(of({ "request": "dummy" }));
-          }
-          return of(reqs);
-        });
+            return of(reqs);
+          })
+        );
     }
 
     public async removeDatastream(oid, datastream: Datastream) {
