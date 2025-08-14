@@ -1,6 +1,4 @@
-import {
-  Observable
-} from 'rxjs/Rx';
+import { Observable, of } from 'rxjs';
 
 import { Sails, Model } from "sails";
 import { v1 as uuidv1 } from 'uuid';
@@ -764,9 +762,9 @@ export module Services {
             reqs.push(this.addAndRemoveDatastreams(oid, fileIdsAdded, removeIds));
           });
           if (_.isEmpty(reqs)) {
-            reqs.push(Observable.of({ "request": "dummy" }));
+            reqs.push(of({ "request": "dummy" }));
           }
-          return Observable.of(reqs);
+          return of(reqs);
         });
     }
 
