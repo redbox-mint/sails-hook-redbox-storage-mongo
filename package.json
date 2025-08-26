@@ -44,7 +44,7 @@
     "mocha": "11.7.1",
     "mocha-junit-reporter": "2.2.1",
     "mongodb": "6.16.0",
-    "sails": "1.5.14",
+    "sails": "1.5.15",
     "stream": "0.0.3",
     "typescript": "5.9.2",
     "util": "0.12.5"
