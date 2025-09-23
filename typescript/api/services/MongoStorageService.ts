@@ -742,6 +742,9 @@ export module Services {
       return FormsService.getFormByName(record.metaMetadata.form, true)
         .pipe(
           mergeMap(form => {
+            // For any generated, view-only forms, the form may be null, add a coalescence to avoid breaking
+            // the attachment update process.
+            form = form ?? { attachmentFields: [] };
             const typedForm = form as { attachmentFields: string[] };
             const reqs = [];
             record.metaMetadata.attachmentFields = typedForm.attachmentFields;
