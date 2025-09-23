@@ -706,9 +706,13 @@ export module Services {
       // loop thru the attachment fields and determine if we need to add or remove
       return FormsService.getFormByName(record.metaMetadata.form, true)
         .flatMap(form => {
+          // For any generated, view-only forms, the form may be null, add a coalescence to avoid breaking
+          // the attachment update process.
+          form = form ?? { attachmentFields: [] };
+          const typedForm = form as { attachmentFields: string[] };
           const reqs = [];
           record.metaMetadata.attachmentFields = form.attachmentFields;
-          _.each(form.attachmentFields, async (attField) => {
+          _.each(typedForm.attachmentFields, async (attField) => {
             const oldAttachments = record.metadata[attField];
             const newAttachments = newMetadata[attField];
             const removeIds = [];
